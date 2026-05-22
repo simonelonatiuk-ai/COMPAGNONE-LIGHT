@@ -7080,3 +7080,2150 @@ function MonitorDoomDrops() {
         Orion.Wait(1000); 
     }
 }
+
+// =====================================================
+// UODREAMS - UTILITIES
+// =====================================================
+
+// =====================================================
+// TALISMANI
+// =====================================================
+
+function SelectOrResetTalisman(varName) {
+    if (Orion.FindObject(varName)) {
+        Orion.RemoveObject(varName);
+        Shared.RemoveVar(varName + '_name');
+        Orion.CharPrint(Player.Serial(), 33, 'Talismano ' + varName + ' resettato!');
+    } else {
+        Orion.CharPrint(Player.Serial(), 55, 'Seleziona il talismano per ' + varName);
+
+        if (Orion.WaitForAddObject(varName, 15000)) {
+            var item = Orion.FindObject(varName);
+            if (item) {
+                Shared.AddVar(varName + '_name', item.Name());
+                Orion.CharPrint(Player.Serial(), 65, 'Talismano salvato: ' + item.Name());
+            }
+        }
+    }
+
+    GUI();
+}
+
+function EquipTalismanQuick(varName) {
+    var talisman = Orion.FindObject(varName);
+
+    if (!talisman) {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessun talismano selezionato!');
+        return false;
+    }
+
+    Orion.CancelTarget();
+    Orion.Equip(talisman.Serial());
+    Orion.Wait(650);
+
+    var equippedTalisman = Orion.ObjAtLayer('Talisman');
+
+    if (equippedTalisman && equippedTalisman.Serial() === talisman.Serial()) return true;
+
+    Orion.CharPrint(Player.Serial(), 33, 'Equip talismano non confermato!');
+    return false;
+}
+
+function ToggleDressTalisman(scriptName) {
+    const allTalismans = ['Dress_TalismanUndead','Dress_TalismanDemon','Dress_TalismanFey','Dress_TalismanDivinum'];
+    const talismanObjectMap = {
+        'Dress_TalismanUndead': 'talisman_undead',
+        'Dress_TalismanDemon': 'talisman_demon',
+        'Dress_TalismanFey': 'talisman_fey',
+        'Dress_TalismanDivinum': 'talisman_divinum'
+    };
+
+    Shared.RemoveVar('active_talisman_script');
+
+    if (allTalismans.indexOf(scriptName) !== -1) {
+        var objVar = talismanObjectMap[scriptName];
+
+        if (EquipTalismanQuick(objVar)) {
+            Shared.AddVar('active_talisman_script', scriptName);
+            Orion.CharPrint(Player.Serial(), 55, '*Talismano: ' + scriptName.replace('Dress_Talisman', '').trim() + '*');
+        }
+    }
+
+    GUI();
+}
+
+// =====================================================
+// WEAPON DRESS
+// =====================================================
+
+function GetSavedWeaponName(varName) {
+    var obj = Orion.FindObject(varName);
+    if (obj) return obj.Name();
+    return Shared.GetVar(varName + '_name') || 'non selezionata';
+}
+
+function SelectOrResetWeapon(varName) {
+    if (Orion.FindObject(varName)) {
+        Orion.RemoveObject(varName);
+        Shared.RemoveVar(varName + '_name');
+        Orion.CharPrint(Player.Serial(), 33, 'Arma ' + varName + ' resettata!');
+    } else {
+        Orion.CharPrint(Player.Serial(), 55, 'Seleziona l\'arma per ' + varName);
+
+        if (Orion.WaitForAddObject(varName, 15000)) {
+            var item = Orion.FindObject(varName);
+            if (item) {
+                Shared.AddVar(varName + '_name', item.Name());
+                Orion.CharPrint(Player.Serial(), 65, 'Arma salvata: ' + item.Name());
+            }
+        }
+    }
+
+    GUI();
+}
+
+function EquipWeaponQuick(varName) {
+    var weapon = Orion.FindObject(varName);
+
+    if (!weapon) {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessuna arma selezionata!');
+        return;
+    }
+
+    Orion.Cast('Create Food');
+    Orion.Wait(100);
+    Orion.CancelTarget();
+    Orion.Equip(weapon.Serial());
+}
+
+function ToggleDressWeapon(scriptName) {
+    const allWeapons = [
+        'Dress_DemonAxe','Dress_DemonBladed','Dress_DemonArea','Dress_Dragon','Dress_DragonArea',
+        'Dress_Reptile','Dress_Fey','Dress_Ogre','Dress_Repond','Dress_Undead','Dress_GenericArea','Dress_Boss',
+        'Dress_Evento','Dress_BladedDragon','Dress_BladedFey','Dress_BladedSpider','Dress_Spider',
+        'Dress_BladedRepond','Dress_BladedSatellite','Dress_BladedUndead','Dress_BladedSearing',
+        'Dress_DoomDarknightCreeper','Dress_DoomFleshrenderer','Dress_DoomImpaler','Dress_DoomShadowKnight',
+        'Dress_DoomAbyssmalHorror','Dress_DoomDarkFather'
+    ];
+
+    const weaponObjectMap = {
+    'Dress_DemonAxe': 'demon_axe',
+    'Dress_DemonBladed': 'demon_bladed',
+    'Dress_DemonArea': 'demon_area',
+    'Dress_Dragon': 'dragon',
+    'Dress_DragonArea': 'dragon_area',
+    'Dress_Reptile': 'reptile',
+    'Dress_Fey': 'fey',
+    'Dress_Ogre': 'ogre',
+    'Dress_Repond': 'repond',
+    'Dress_Undead': 'undead',
+    'Dress_GenericArea': 'generic_area',
+    'Dress_Boss': 'boss',
+    'Dress_Evento': 'evento',
+    'Dress_BladedDragon': 'bladed_dragon',
+    'Dress_BladedFey': 'bladed_fey',
+    'Dress_BladedRepond': 'bladed_repond',
+    'Dress_BladedSatellite': 'bladed_satellite',
+    'Dress_BladedUndead': 'bladed_undead',
+    'Dress_BladedSpider': 'bladed_spider',
+    'Dress_Spider': 'spider',
+    'Dress_BladedSearing': 'bladed_searing',
+    'Dress_DoomDarknightCreeper': 'doom_darknight_creeper',
+    'Dress_DoomFleshrenderer': 'doom_fleshrenderer',
+    'Dress_DoomImpaler': 'doom_impaler',
+    'Dress_DoomShadowKnight': 'doom_shadow_knight',
+    'Dress_DoomAbyssmalHorror': 'doom_abyssmal_horror',
+    'Dress_DoomDarkFather': 'doom_dark_father'
+};
+
+    for (var i = 0; i < allWeapons.length; i++) Orion.Terminate(allWeapons[i]);
+
+    Shared.RemoveVar('active_weapon_script');
+
+    if (allWeapons.indexOf(scriptName) !== -1) {
+        Shared.AddVar('active_weapon_script', scriptName);
+
+        var objVar = weaponObjectMap[scriptName];
+        EquipWeaponQuick(objVar);
+
+        if (scriptName === 'Dress_BladedSearing') {
+            var searingWeapon = Orion.FindObject(objVar);
+
+            if (searingWeapon) {
+                Orion.Wait(300);
+                CheckAndActivateLavaInfused(true);
+            } else {
+                Orion.CharPrint(Player.Serial(), 33, 'Arma Lava Infused non trovata!');
+            }
+        } else {
+            Orion.Wait(300);
+            CheckAndActivateLavaInfused(true);
+        }
+
+        Orion.CharPrint(Player.Serial(), 55, '*Equip: ' + scriptName.replace('Dress_', '').replace(/([A-Z])/g, ' $1').trim() + '*');
+    }
+
+    GUI();
+}
+
+// =====================================================
+// DRESS GENERICO / LUCK
+// =====================================================
+
+function SaveDressHands(dressName) {
+    var right = Orion.ObjAtLayer('RightHand');
+    var left = Orion.ObjAtLayer('LeftHand');
+
+    Orion.RemoveObject(dressName + '_right_hand');
+    Orion.RemoveObject(dressName + '_left_hand');
+    Shared.RemoveVar(dressName + '_right_hand_name');
+    Shared.RemoveVar(dressName + '_left_hand_name');
+
+    if (right) {
+        Orion.AddObject(dressName + '_right_hand', right.Serial());
+        Shared.AddVar(dressName + '_right_hand_name', right.Name());
+    }
+
+    if (left) {
+        Orion.AddObject(dressName + '_left_hand', left.Serial());
+        Shared.AddVar(dressName + '_left_hand_name', left.Name());
+    }
+}
+
+function EquipDressHands(dressName) {
+    var right = Orion.FindObject(dressName + '_right_hand');
+    var left = Orion.FindObject(dressName + '_left_hand');
+
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+
+    if (right) {
+        Orion.Equip(right.Serial());
+        Orion.Wait(250);
+    }
+
+    if (left) {
+        Orion.Equip(left.Serial());
+        Orion.Wait(250);
+    }
+
+    CheckAndActivateLavaInfused(true);
+}
+
+function SaveCompagnoneDress() {
+    Orion.SetDress('compagnone');
+    SaveDressHands('compagnone');
+    Orion.CharPrint(Player.Serial(), 65, '*Dress COMPAGNONE salvato con arma/scudo!*');
+    Orion.Print(65, 'Dress list salvata/aggiornata: compagnone + mani');
+}
+
+function DressCompagnone() {
+    Orion.Dress('compagnone');
+    Orion.Wait(500);
+    EquipDressHands('compagnone');
+    Orion.CharPrint(Player.Serial(), 65, '*Dress COMPAGNONE equipaggiato!*');
+    Orion.Print(65, 'Dress list equipaggiata: compagnone + mani');
+}
+
+function SaveLuckDress() {
+    Orion.SetDress('luck');
+    SaveDressHands('luck');
+    Orion.CharPrint(Player.Serial(), 65, '*Dress LUCK salvato con arma/scudo!*');
+    Orion.Print(65, 'Dress list salvata/aggiornata: luck + mani');
+}
+
+function DressLuck() {
+    Orion.Dress('luck');
+    Orion.Wait(500);
+    EquipDressHands('luck');
+    Orion.CharPrint(Player.Serial(), 65, '*Dress LUCK equipaggiato!*');
+    Orion.Print(65, 'Dress list equipaggiata: luck + mani');
+}
+
+// =====================================================
+// ADD TO REPAIR BENCH
+// =====================================================
+
+function AddToRepairBench() {
+    Orion.CharPrint(Player.Serial(), 65, 'Seleziona item da aggiungere alla Repair Bench');
+
+    if (!Orion.WaitForAddObject('repairbench_pending_item', 15000)) {
+        Orion.CharPrint(Player.Serial(), 33, 'Target annullato.');
+        return;
+    }
+
+    var item = Orion.FindObject('repairbench_pending_item');
+
+    if (!item) {
+        Orion.CharPrint(Player.Serial(), 33, 'Item non trovato.');
+        return;
+    }
+
+    Shared.AddVar('repairbench_pending_graphic', item.Graphic());
+    Shared.AddVar('repairbench_pending_name', item.Name());
+
+    RepairBenchToolSelectorGUI();
+}
+
+function RepairBenchToolSelectorGUI() {
+    var g = Orion.CreateCustomGump(REPAIR_TOOL_GUMP_ID);
+    g.Clear();
+    g.SetCallback('RepairBenchToolOnClick');
+
+    var offsetX = 350;
+    var offsetY = 280;
+    var width = 8;
+    var height = 5;
+
+    DrawPanel(g, offsetX, offsetY, width, height);
+
+    if (typeof AddGuiTitle === 'function') {
+        AddGuiTitle(g, offsetX, offsetY, width, 'SELECT REPAIR TOOL');
+    } else {
+        g.AddText(offsetX + 55, offsetY + 15, 89, 'SELECT REPAIR TOOL');
+    }
+
+    AddBigButton(g, 8001, offsetX + 55, offsetY + 55, '', '0x796', 'Blacksmith', 'Usa Blacksmith', 22);
+    AddBigButton(g, 8002, offsetX + 55, offsetY + 85, '', '0x796', 'Tailor', 'Usa Tailor', 22);
+    AddBigButton(g, 8003, offsetX + 55, offsetY + 115, '', '0x796', 'Tinker', 'Usa Tinker', 22);
+
+    g.AddButton(8000, offsetX + 250, offsetY + 12, '0xA94', '0xA94', '0xA95', '');
+    g.AddTooltip('Close');
+
+    g.SetNoClose(true);
+    g.Update();
+}
+
+function RepairBenchToolOnClick() {
+    var buttonID = CustomGumpResponse.ReturnCode();
+
+    switch (buttonID) {
+        case 8001:
+            SaveRepairBenchItem('blacksmith');
+            break;
+
+        case 8002:
+            SaveRepairBenchItem('tailor');
+            break;
+
+        case 8003:
+            SaveRepairBenchItem('tinker');
+            break;
+
+        case 8000:
+            var g = Orion.CreateCustomGump(REPAIR_TOOL_GUMP_ID);
+            g.Close();
+            break;
+    }
+}
+
+function SaveRepairBenchItem(toolType) {
+    var graphic = Shared.GetVar('repairbench_pending_graphic');
+    var itemName = Shared.GetVar('repairbench_pending_name');
+
+    if (!graphic || !itemName) {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessun item in memoria.');
+        return;
+    }
+
+    graphic = NormalizeRepairGraphic(graphic);
+    itemName = CleanRepairString(itemName);
+    toolType = CleanRepairString(toolType);
+
+    var alreadyExists = RepairGraphicAlreadyExists(graphic);
+    var filePath = Orion.CurrentScriptDirPath() + '/COMPAGNONE_REPAIRBENCH.oajs';
+
+    var line =
+        "\n// Added by Compagnone Repair Bench" +
+        (alreadyExists ? " - OVERRIDE GRAPHIC ESISTENTE" : "") + "\n" +
+        "if (typeof customRepairArr === \"undefined\") var customRepairArr = [];\n" +
+        "customRepairArr.push(" +
+            QuoteRepairString(graphic) + "," +
+            QuoteRepairString(itemName) + "," +
+            QuoteRepairString(toolType) +
+        ");\n";
+
+    var file = Orion.NewFile();
+
+    if (!file.Open(filePath, true)) {
+        Orion.CharPrint(Player.Serial(), 33, 'Errore apertura file repair bench.oajs');
+        return;
+    }
+
+    Orion.Wait(50);
+    file.Append(filePath);
+    file.Write(line);
+    file.Close();
+
+    // Aggiorna itemArr in memoria, se esiste nello stesso script/runtime
+    if (typeof itemArr !== 'undefined') {
+        var updated = false;
+
+        for (var i = itemArr.length - 3; i >= 0; i -= 3) {
+            if (String(itemArr[i]).toLowerCase() === String(graphic).toLowerCase()) {
+                itemArr[i] = graphic;
+                itemArr[i + 1] = itemName;
+                itemArr[i + 2] = toolType;
+                updated = true;
+                break;
+            }
+        }
+
+        if (!updated) {
+            itemArr.push(graphic, itemName, toolType);
+        }
+    }
+
+    RememberRepairGraphic(graphic);
+    RememberRuntimeRepairOverride(graphic, itemName, toolType);
+
+    Orion.CharPrint(
+        Player.Serial(),
+        alreadyExists ? 33 : 65,
+        alreadyExists ? 'Graphic gia presente: usero ultimo inserito.' : 'Nuovo graphic aggiunto alla Repair Bench.'
+    );
+
+    Orion.CharPrint(Player.Serial(), 65, 'Aggiunto: ' + itemName + ' / ' + toolType);
+
+    Shared.RemoveVar('repairbench_pending_graphic');
+    Shared.RemoveVar('repairbench_pending_name');
+
+    var g = Orion.CreateCustomGump(REPAIR_TOOL_GUMP_ID);
+    g.Close();
+
+    GUI();
+}
+
+function RememberRuntimeRepairOverride(graphic, itemName, toolType) {
+    graphic = NormalizeRepairGraphic(graphic);
+    itemName = CleanRepairString(itemName);
+    toolType = CleanRepairString(toolType);
+
+    var g = graphic.toLowerCase();
+    var data = Shared.GetVar('repairbench_runtime_overrides') || '';
+    var rows = String(data).split('\n');
+    var newRows = [];
+    var replaced = false;
+
+    for (var i = 0; i < rows.length; i++) {
+        if (!rows[i]) {
+            continue;
+        }
+
+        var parts = rows[i].split('§');
+
+        if (parts.length < 3) {
+            continue;
+        }
+
+        if (String(parts[0]).toLowerCase() === g) {
+            newRows.push(graphic + '§' + itemName + '§' + toolType);
+            replaced = true;
+        } else {
+            newRows.push(rows[i]);
+        }
+    }
+
+    if (!replaced) {
+        newRows.push(graphic + '§' + itemName + '§' + toolType);
+    }
+
+    Shared.AddVar('repairbench_runtime_overrides', newRows.join('\n'));
+}
+
+function RepairGraphicAlreadyExists(graphic) {
+    var g = NormalizeRepairGraphic(graphic).toLowerCase();
+
+    if (typeof itemArr !== 'undefined' && itemArr.length) {
+        for (var i = 0; i < itemArr.length; i += 3) {
+            if (String(itemArr[i]).toLowerCase() === g) {
+                return true;
+            }
+        }
+    }
+
+    var saved = Shared.GetVar('repairbench_added_graphics');
+    return !!(saved && String(saved).toLowerCase().indexOf('|' + g + '|') >= 0);
+}
+
+function RememberRepairGraphic(graphic) {
+    var g = NormalizeRepairGraphic(graphic).toLowerCase();
+    var saved = Shared.GetVar('repairbench_added_graphics') || '|';
+
+    if (String(saved).indexOf('|' + g + '|') < 0) {
+        saved += g + '|';
+        Shared.AddVar('repairbench_added_graphics', saved);
+    }
+}
+
+function NormalizeRepairGraphic(graphic) {
+    var g = String(graphic);
+
+    if (g.indexOf('0x') !== 0 && g.indexOf('0X') !== 0) {
+        g = '0x' + g;
+    }
+
+    return g.toUpperCase().replace('0X', '0x');
+}
+
+function CleanRepairString(str) {
+    return String(str)
+        .replace(/\r/g, '')
+        .replace(/\n/g, ' ')
+        .replace(/\t/g, ' ')
+        .replace(/\s+/g, ' ');
+}
+
+function QuoteRepairString(str) {
+    return '"' + String(str)
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\r/g, '')
+        .replace(/\n/g, ' ')
+        + '"';
+}
+
+// =====================================================
+// POSITION MANAGER
+// =====================================================
+
+function InitGuiPositions() {
+    if (Shared.GetVar('positions_loaded_from_file') !== true) {
+        LoadGuiPositionsFromFile();
+        Shared.AddVar('positions_loaded_from_file', true);
+    }
+
+    if (Shared.GetVar('compagnone_gui_x') == null) Shared.AddVar('compagnone_gui_x', DEFAULT_COMPAGNONE_X);
+    if (Shared.GetVar('compagnone_gui_y') == null) Shared.AddVar('compagnone_gui_y', DEFAULT_COMPAGNONE_Y);
+    if (Shared.GetVar('durability_gui_x') == null) Shared.AddVar('durability_gui_x', DEFAULT_DURABILITY_X);
+    if (Shared.GetVar('durability_gui_y') == null) Shared.AddVar('durability_gui_y', DEFAULT_DURABILITY_Y);
+}
+
+function GetCompagnoneGuiX() { InitGuiPositions(); return Number(Shared.GetVar('compagnone_gui_x')); }
+
+function GetCompagnoneGuiY() { InitGuiPositions(); return Number(Shared.GetVar('compagnone_gui_y')); }
+
+function GetDurabilityGuiX() { InitGuiPositions(); return Number(Shared.GetVar('durability_gui_x')); }
+
+function GetDurabilityGuiY() { InitGuiPositions(); return Number(Shared.GetVar('durability_gui_y')); }
+
+function SaveCompagnoneGuiPos(x, y) {
+    Shared.AddVar('compagnone_gui_x', x);
+    Shared.AddVar('compagnone_gui_y', y);
+    SaveGuiPositionsToFile();
+    Orion.Print(65, 'Posizione Compagnone salvata: X=' + x + ' Y=' + y);
+}
+
+function InitPositionManagerVars() {
+    if (Shared.GetVar('position_manager_x') == null) Shared.AddVar('position_manager_x', DEFAULT_POSITION_MANAGER_X);
+    if (Shared.GetVar('position_manager_y') == null) Shared.AddVar('position_manager_y', DEFAULT_POSITION_MANAGER_Y);
+    if (Shared.GetVar('position_step') == null) Shared.AddVar('position_step', DEFAULT_POSITION_STEP);
+}
+
+function GetPositionManagerX() {
+    InitPositionManagerVars();
+    return Number(Shared.GetVar('position_manager_x'));
+}
+
+function GetPositionManagerY() {
+    InitPositionManagerVars();
+    return Number(Shared.GetVar('position_manager_y'));
+}
+
+function GetPositionStep() {
+    InitPositionManagerVars();
+    return Number(Shared.GetVar('position_step'));
+}
+
+function SetPositionStep(step) {
+    Shared.AddVar('position_step', step);
+    PositionManagerGUI();
+}
+
+function GetStepColor(step) {
+    return GetPositionStep() === step ? HUE_ACTIVE_TEXT : HUE_OFF_TEXT;
+}
+
+function SaveDurabilityGuiPos(x, y) {
+    Shared.AddVar('durability_gui_x', x);
+    Shared.AddVar('durability_gui_y', y);
+    SaveGuiPositionsToFile();
+    Orion.Print(65, 'Posizione Durability salvata: X=' + x + ' Y=' + y);
+}
+
+function MoveCompagnoneGui(dx, dy) {
+    Shared.AddVar('compagnone_gui_x', GetCompagnoneGuiX() + dx);
+    Shared.AddVar('compagnone_gui_y', GetCompagnoneGuiY() + dy);
+
+    GUI();
+
+    Orion.Wait(50);
+    PositionManagerGUI();
+}
+
+function MoveDurabilityGui(dx, dy) {
+    var x = GetDurabilityGuiX() + dx;
+    var y = GetDurabilityGuiY() + dy;
+
+    Shared.AddVar('durability_gui_x', x);
+    Shared.AddVar('durability_gui_y', y);
+
+    Orion.MoveGump('custom', x, y, 'any', DURABILITY_GUMP_ID);
+
+    Orion.Wait(50);
+    PositionManagerGUI();
+}
+
+function ResetCompagnoneGuiPos() {
+    Shared.AddVar('compagnone_gui_x', DEFAULT_COMPAGNONE_X);
+    Shared.AddVar('compagnone_gui_y', DEFAULT_COMPAGNONE_Y);
+    SaveGuiPositionsToFile();
+    GUI();
+    PositionManagerGUI();
+}
+
+function ResetDurabilityGuiPos() {
+    Shared.AddVar('durability_gui_x', DEFAULT_DURABILITY_X);
+    Shared.AddVar('durability_gui_y', DEFAULT_DURABILITY_Y);
+    SaveGuiPositionsToFile();
+    Orion.MoveGump('custom', DEFAULT_DURABILITY_X, DEFAULT_DURABILITY_Y, 'any', DURABILITY_GUMP_ID);
+    PositionManagerGUI();
+}
+
+// =====================================================
+// POSITION PERSISTENCE
+// =====================================================
+
+var COMPAGNONE_POSITIONS_FILE = 'COMPAGNONE_POSITIONS.oajs';
+
+function LoadGuiPositionsFromFile() {
+    // Queste variabili arrivano da //#include compagnone_positions.oajs
+    if (typeof SAVED_COMPAGNONE_GUI_X !== 'undefined') {
+        Shared.AddVar('compagnone_gui_x', SAVED_COMPAGNONE_GUI_X);
+    }
+
+    if (typeof SAVED_COMPAGNONE_GUI_Y !== 'undefined') {
+        Shared.AddVar('compagnone_gui_y', SAVED_COMPAGNONE_GUI_Y);
+    }
+
+    if (typeof SAVED_DURABILITY_GUI_X !== 'undefined') {
+        Shared.AddVar('durability_gui_x', SAVED_DURABILITY_GUI_X);
+    }
+
+    if (typeof SAVED_DURABILITY_GUI_Y !== 'undefined') {
+        Shared.AddVar('durability_gui_y', SAVED_DURABILITY_GUI_Y);
+    }
+}
+
+function SaveGuiPositionsToFile() {
+    // Aggiunto Orion.CurrentScriptDirPath() per far puntare il salvataggio alla cartella corretta!
+    var filePath = Orion.CurrentScriptDirPath() + '/' + COMPAGNONE_POSITIONS_FILE;
+    var file = Orion.NewFile();
+    
+    var content =
+        "var SAVED_COMPAGNONE_GUI_X = " + GetCompagnoneGuiX() + ";\n" +
+        "var SAVED_COMPAGNONE_GUI_Y = " + GetCompagnoneGuiY() + ";\n" +
+        "var SAVED_DURABILITY_GUI_X = " + GetDurabilityGuiX() + ";\n" +
+        "var SAVED_DURABILITY_GUI_Y = " + GetDurabilityGuiY() + ";\n";
+        
+    file.Open(filePath, true);
+    Orion.Wait(50);
+    file.Write(content);
+    file.Close();
+
+    Orion.Print(65, '[2] Posizioni GUI salvate su file:');
+    Orion.Print(65, filePath);
+}
+
+function ToggleFarmScript(scriptName, label) {
+    if (Orion.ScriptRunning(scriptName)) {
+        Orion.Terminate(scriptName);
+        Orion.WarMode(false);
+        Orion.CancelTarget();
+        Orion.CancelWaitTarget();
+
+        var timeoutStop = Orion.Now() + 1000;
+        while (Orion.ScriptRunning(scriptName) && Orion.Now() < timeoutStop) {
+            Orion.Wait(50);
+        }
+
+        Orion.CharPrint(Player.Serial(), 33, label + ' STOPPATO');
+    } else {
+        Orion.Exec(scriptName, 'true');
+
+        var timeoutStart = Orion.Now() + 1000;
+        while (!Orion.ScriptRunning(scriptName) && Orion.Now() < timeoutStart) {
+            Orion.Wait(50);
+        }
+
+        Orion.CharPrint(Player.Serial(), 65, label + ' AVVIATO');
+    }
+}
+
+// =====================================================
+// SYSTEM STOP / RESTART
+// =====================================================
+
+function SpegniTutto() {
+    Orion.SetGlobal('StopAllScripts', 'true');
+    Shared.RemoveVar('cerca_attivo');
+    Orion.WarMode(false);
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+
+    var farmGump = Orion.CreateCustomGump(FARM_MENU_GUMP_ID);
+    farmGump.Close();
+
+    var doomGump = Orion.CreateCustomGump(DOOM_MENU_GUMP_ID);
+    doomGump.Close();
+
+    Orion.Wait(300);
+    Orion.Exec('PostStopHandler');
+    Orion.Terminate('all');
+}
+
+function PostStopHandler() {
+    Orion.Wait(200);
+    Orion.WarMode(false);
+
+    // ---> LA CORREZIONE: Rimette il semaforo su "verde" per far girare gli script!
+    Orion.SetGlobal('StopAllScripts', 'false');
+
+    Orion.Exec('AutoMount', 'true');
+    Orion.Exec('Durability_Watcher', 'true');
+    Orion.Exec('SuperInsura', 'true');
+    Orion.Exec('AutoReEquip', 'true');
+    Orion.Exec('AutoVampiricEmbrace', 'true');
+    
+    // Assicuriamoci che ripartano entrambi i controlli difensivi in background
+    Orion.Exec('CheckCurseAndPoison', 'true');
+    Orion.Exec('AutoCleansePoison', 'true');
+
+    Orion.Print('0x55', '<< Tutti gli script fermati correttamente >>');
+    Orion.Print('0x55', '<< Scripts di Autostart RIAVVIATI! >>');
+
+    Orion.Wait(100);
+    GUI();
+    
+}
+
+// =====================================================
+// RUNEBOOK
+// =====================================================
+
+function SelectOrResetRunebook(varName, label) {
+    if (Orion.FindObject(varName)) {
+        Orion.RemoveObject(varName);
+        Shared.RemoveVar(varName + '_name');
+        Orion.CharPrint(Player.Serial(), 33, label + ' resettato!');
+        GUI();
+        return;
+    }
+
+    Orion.CharPrint(Player.Serial(), 55, 'Seleziona ' + label);
+
+    if (Orion.WaitForAddObject(varName, 15000)) {
+        var item = Orion.FindObject(varName);
+
+        if (item) {
+            Shared.AddVar(varName + '_name', item.Name());
+            Orion.CharPrint(Player.Serial(), 65, label + ' salvato: ' + item.Name());
+        }
+    } else {
+        Orion.CharPrint(Player.Serial(), 33, 'Tempo scaduto: nessuna selezione.');
+    }
+
+    GUI();
+}
+
+function RecallRunebook(varName, label) {
+    var book = Orion.FindObject(varName);
+
+    if (!book) {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessun runebook salvato per ' + label);
+        return;
+    }
+
+    Orion.CancelTarget();
+    Orion.Cast('Sacred Journey');
+
+    if (Orion.WaitForTarget(1500)) {
+        Orion.TargetObject(book.Serial());
+        Orion.CharPrint(Player.Serial(), 65, 'Sacred Journey -> ' + label);
+    } else {
+        Orion.CharPrint(Player.Serial(), 33, 'Target non disponibile per Sacred Journey.');
+    }
+}
+
+function RecallCasa() { RecallRunebook('runebook_casa', 'CASA'); }
+
+function RecallLunaBanca() { RecallRunebook('runebook_luna', 'LUNA BANCA'); }
+
+// =====================================================
+// SUPER INSURA
+// =====================================================
+
+function ResetSuperInsuraIgnore() {
+    Orion.SetGlobal('SuperInsura_IgnoreSerials', '');
+    Orion.Print(65, 'Ignore SuperInsura resettato.');
+}
+
+function SuperInsura() {
+    const contextMenu = Player.Serial();
+
+    // === CONFIG ===
+    var ignoreList = [
+        '0xA3E8'
+    ];
+
+    var maxAttemptsBeforeIgnore = 2;
+
+    // === UTILS: normalizzazione seriale in chiave comparabile ===
+    function ToKey(x) {
+        var s = '' + x;
+        s = s.toLowerCase();
+
+        if (s.length >= 2 && s.substr(0, 2) === '0x') {
+            var body = s.substr(2);
+
+            while (body.length > 1 && body.charAt(0) === '0') {
+                body = body.substr(1);
+            }
+
+            return '0x' + body;
+        }
+
+        var isDec = true;
+
+        for (var i = 0; i < s.length; i++) {
+            var c = s.charAt(i);
+
+            if (c < '0' || c > '9') {
+                isDec = false;
+                break;
+            }
+        }
+
+        if (isDec && s.length > 0) {
+            var n = parseInt(s, 10);
+
+            if (n >= 0 && !isNaN(n)) {
+                var hex = n.toString(16);
+                return '0x' + hex;
+            }
+        }
+
+        var isHex = true;
+
+        for (var j = 0; j < s.length; j++) {
+            var d = s.charAt(j);
+
+            if (!((d >= '0' && d <= '9') || (d >= 'a' && d <= 'f'))) {
+                isHex = false;
+                break;
+            }
+        }
+
+        if (isHex && s.length > 0) {
+            var b = s;
+
+            while (b.length > 1 && b.charAt(0) === '0') {
+                b = b.substr(1);
+            }
+
+            return '0x' + b;
+        }
+
+        return s;
+    }
+
+    function LoadPersistentIgnoreList() {
+        var saved = Orion.GetGlobal('SuperInsura_IgnoreSerials');
+        var set = {};
+
+        if (!saved || saved === '') {
+            return set;
+        }
+
+        var parts = saved.split('|');
+
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] && parts[i] !== '') {
+                set[parts[i]] = true;
+            }
+        }
+
+        return set;
+    }
+
+    function SavePersistentIgnoreList(ignoreSet) {
+        var arr = [];
+
+        for (var key in ignoreSet) {
+            if (ignoreSet[key]) {
+                arr.push(key);
+            }
+        }
+
+        Orion.SetGlobal('SuperInsura_IgnoreSerials', arr.join('|'));
+    }
+
+    function AddToIgnore(ignoreSet, key) {
+        ignoreSet[key] = true;
+        SavePersistentIgnoreList(ignoreSet);
+    }
+
+    // crea set ignorati caricando anche quelli salvati
+    var ignoreSet = LoadPersistentIgnoreList();
+
+    for (var k = 0; k < ignoreList.length; k++) {
+        ignoreSet[ToKey(ignoreList[k])] = true;
+    }
+
+    SavePersistentIgnoreList(ignoreSet);
+
+    var attemptCount = {};
+
+    while (Player.Dead() == false) {
+        var backpackContents = Orion.FindList('insura', backpack);
+
+        for (var i = 0; i < backpackContents.length; i++) {
+            var itemSerial = backpackContents[i];
+            var key = ToKey(itemSerial);
+
+            // 1) ignora se in ignoreSet
+            if (ignoreSet[key]) {
+                continue;
+            }
+
+            var itemInfo = Orion.FindObject(itemSerial);
+
+            if (!itemInfo) {
+                continue;
+            }
+
+            var props = itemInfo.Properties() || '';
+
+            // 2) salta Blessed/Cursed
+            if (Orion.Contains(props, 'Blessed') || Orion.Contains(props, 'Cursed')) {
+                continue;
+            }
+
+            // 3) se già insured, salta
+            if (Orion.Contains(props, 'Insured|Assicurato')) {
+                attemptCount[key] = 0;
+                continue;
+            }
+
+            // 4) prova ad assicurare
+            Orion.ClearJournal();
+
+            Orion.RequestContextMenu(contextMenu);
+            Orion.WaitContextMenuID(contextMenu, 3);
+            Orion.WaitTargetObject(itemSerial);
+
+            Orion.Wait(600);
+            Orion.CancelTarget();
+
+            // 5) se il server dice "You cannot insure that", salva il seriale in ignore
+            if (Orion.InJournal('You cannot insure that')) {
+                AddToIgnore(ignoreSet, key);
+
+                Orion.CharPrint(itemSerial, 33, '*NON ASSICURABILE*');
+                Orion.CharPrint(Player.Serial(), 33, '*Aggiunto a ignore SuperInsura*');
+                Orion.Print(33, 'SuperInsura ignore persistente: ' + key);
+
+                continue;
+            }
+
+            // ricontrolla le proprietà
+            var checkInfo = Orion.FindObject(itemSerial);
+            var checkProps = checkInfo ? (checkInfo.Properties() || '') : '';
+            var insuredNow = Orion.Contains(checkProps, 'Insured|Assicurato');
+
+            if (insuredNow) {
+                attemptCount[key] = 0;
+                Orion.PlayWav("C:\\Orion Launcher\\OA\\beep.wav");
+            } else {
+                var prev = attemptCount[key] ? attemptCount[key] : 0;
+                var curr = prev + 1;
+
+                attemptCount[key] = curr;
+
+                if (curr >= maxAttemptsBeforeIgnore) {
+                    AddToIgnore(ignoreSet, key);
+                }
+            }
+        }
+
+        Orion.Wait(600);
+    }
+}
+
+// =====================================================
+// DURABILITY WATCHER
+// =====================================================
+
+function AddDurabilityTitle(gump, offsetX, offsetY, width) {
+    var title = 'CHECK DURABILITY';
+    var panelWidth = width * 35;
+    var titleX = offsetX + Math.floor((panelWidth - title.length * 7) / 2);
+
+    gump.AddText(titleX, offsetY + 18, HUE_WHITE_TEXT, title);
+    gump.AddLine(offsetX + 35, offsetY + 45, offsetX + panelWidth - 35, offsetY + 45, HUE_WHITE_TEXT);
+}
+
+function GetLayerName(layer) {
+    var names = {
+        1:  'WEAPON',
+        2:  'WEAPON',
+        3:  'SHOES',
+        4:  'LEGGINGS',
+        5:  'SHIRT',
+        6:  'HELMET',
+        7:  'GLOVES',
+        8:  'RING',
+        9:  'TALISMAN',
+        10: 'GORGET',
+        11: 'HAIR',
+        12: 'WAIST',
+        13: 'CHEST',
+        14: 'BRACE',
+        15: 'FACIAL HAIR',
+        16: 'MIDDLE TORSO',
+        17: 'BODY SASH',
+        18: 'EARRINGS',
+        19: 'SLEEVES',
+        20: 'BACKPACK',
+        21: 'OUTER TORSO',
+        22: 'TUNIC',
+        23: 'INNER LEGS',
+        24: 'MOUNT'
+    };
+
+    return names[layer] || ('LAYER ' + layer);
+}
+
+function GetDurabilitySortOrder(layer) {
+    var order = {
+        // SEMPRE SOPRA
+        1:  10,  // WEAPON
+        2:  11,  // WEAPON
+
+        // ARMOR PRINCIPALE
+        6:  20,  // HELMET
+        10: 21,  // GORGET
+        19: 22,  // SLEEVES
+        7:  23,  // GLOVES
+        13: 24,  // CHEST
+        4:  25,  // LEGGINGS
+
+        // JEWELS
+        18: 30,  // EARRINGS
+        8:  31,  // RING
+        14: 32   // BRACE
+    };
+
+    return order[layer] || (100 + layer);
+}
+
+function Durability_Watcher() {
+    var refreshDelay = 750;
+
+    while (true) {
+        if (!Player.Dead()) {
+            var equipped = [];
+
+            for (var i = 1; i <= 24; i++) {
+                var item = Orion.ObjAtLayer(i);
+                if (!item) continue;
+
+                var props = item.Properties();
+                if (!props || !Orion.Contains(props, 'Durability')) continue;
+
+                var matches = /Durability\s+(\d+)\s\/\s(\d+)/.exec(props);
+                if (!matches || matches.length <= 2) continue;
+
+                equipped.push({
+                    layer: i,
+                    layerName: GetLayerName(i),
+                    durability: Number(matches[1]),
+                    maxDurability: Number(matches[2])
+                });
+            }
+
+            equipped.sort(function(a, b) {
+                return GetDurabilitySortOrder(a.layer) - GetDurabilitySortOrder(b.layer);
+            });
+
+            var offsetX = (typeof GetDurabilityGuiX === 'function') ? GetDurabilityGuiX() : -55;
+            var offsetY = (typeof GetDurabilityGuiY === 'function') ? GetDurabilityGuiY() : -55;
+
+            var gump = Orion.CreateCustomGump(DURABILITY_GUMP_ID);
+            gump.Clear();
+
+            var width = 6;
+            var contentHeight = 76 + equipped.length * 14;
+            var height = Math.max(4, Math.ceil(contentHeight / 35));
+
+            DrawPanel(gump, offsetX, offsetY, width, height);
+            AddDurabilityTitle(gump, offsetX, offsetY, width);
+
+            var y = offsetY + 58;
+            var layerTextX = offsetX + 32;
+            var duraTextX  = offsetX + 122;
+
+            if (equipped.length === 0) {
+                gump.AddText(offsetX + 15, y, HUE_WHITE_TEXT, 'NO DURABILITY ITEMS');
+            } else {
+                for (var j = 0; j < equipped.length; j++) {
+                    var entry = equipped[j];
+                    var textColor;
+
+                    if (entry.durability < 50) textColor = HUE_DURA_BAD;
+                    else if (entry.durability < 150) textColor = HUE_DURA_WARN;
+                    else textColor = HUE_DURA_GOOD;
+
+                    gump.AddText(layerTextX, y, textColor, entry.layerName);
+                    gump.AddText(duraTextX, y, textColor, entry.durability + '/' + entry.maxDurability);
+                    y += 14;
+                }
+            }
+
+            gump.Update();
+        }
+
+        Orion.Wait(refreshDelay);
+    }
+}
+
+// =====================================================
+// GOLD / WEIGHT / BAG
+// =====================================================
+
+function RaccogliSoldi() {
+    var goldID = '0x0EED', distanza = 3;
+
+    while (!Player.Dead()) {
+        var items = Orion.FindType(goldID, '-1', 'ground', 'near', distanza);
+
+        for (var i = 0; i < items.length; i++) {
+            var item = Orion.FindObject(items[i]);
+
+            if (item && item.Distance() <= distanza) {
+                Orion.MoveItem(item.Serial(), item.Amount, 'backpack');
+                Orion.Wait(300);
+            }
+        }
+
+        Orion.Wait(300);
+    }
+}
+
+function GoldRunnerChase95() {
+    var GOLD_ID = '0x0EED', BAG_ID = '0x0E76', RAGGIO_PICKUP = 2, RAGGIO_SCAN = 12;
+    var lastGoldSerial = null;
+
+    Orion.Print('GOLDIGGERS avviato');
+
+    var bagList = Orion.FindType(BAG_ID, '-1', 'backpack');
+    var bagSerial = bagList.length ? bagList[0] : null;
+
+    if (!bagSerial) Orion.CharPrint(Player.Serial(), 33, 'Bag of Sending non trovata!');
+
+    while (!Player.Dead()) {
+        if (bagSerial && Player.Weight() >= Math.floor(Player.MaxWeight() * 0.95)) {
+            Orion.UseObject(bagSerial);
+
+            if (Orion.WaitForTarget(3000)) {
+                var goldInBackpack = Orion.FindType(GOLD_ID, '-1', 'backpack');
+
+                if (goldInBackpack.length) Orion.TargetObject(goldInBackpack[0]);
+                else if (lastGoldSerial) Orion.TargetObject(lastGoldSerial);
+                else {
+                    var vicino = Orion.FindType(GOLD_ID, '-1', 'ground', 'near', 1);
+                    if (vicino.length) Orion.TargetObject(vicino[0]);
+                }
+
+                Orion.CharPrint(Player.Serial(), 65, 'Oro inviato in banca.');
+            } else {
+                Orion.CharPrint(Player.Serial(), 33, 'Nessun target dalla Bag of Sending.');
+            }
+
+            Orion.Wait(400);
+        }
+
+        var piles = Orion.FindType(GOLD_ID, '-1', 'ground', 'near', RAGGIO_SCAN);
+
+        if (!piles.length) {
+            Orion.Wait(200);
+            continue;
+        }
+
+        var nearest = null, dist = 999;
+
+        for (var i = 0; i < piles.length; i++) {
+            var it = Orion.FindObject(piles[i]);
+
+            if (it && it.Distance() < dist) {
+                dist = it.Distance();
+                nearest = it;
+            }
+        }
+
+        if (!nearest) {
+            Orion.Wait(150);
+            continue;
+        }
+
+        if (nearest.Distance() > RAGGIO_PICKUP) {
+            Orion.WalkTo(nearest.X(), nearest.Y(), nearest.Z(), 1, 255, 1, 2, 5000);
+            Orion.Wait(400);
+        } else {
+            lastGoldSerial = nearest.Serial();
+            Orion.MoveItem(nearest.Serial(), nearest.Amount, 'backpack');
+            Orion.Wait(600);
+        }
+
+        Orion.Wait(150);
+    }
+
+    Orion.CharPrint(Player.Serial(), 55, 'GoldRunner terminato.');
+}
+
+function UseBagOfSending() {
+    var bag = Orion.FindType('0x0E76', '-1', 'backpack');
+
+    if (!bag.length) {
+        Orion.CharPrint(Player.Serial(), 33, 'Bag of Sending non trovata nello zaino!');
+        return;
+    }
+
+    Orion.PauseScript('RaccogliSoldi');
+    Orion.CharPrint(Player.Serial(), 55, 'Golddigger messo in pausa');
+
+    var gold = Orion.FindType('0x0EED', '-1', 'backpack');
+
+    if (!gold.length) {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessun oro trovato nello zaino!');
+        Orion.ResumeScript('RaccogliSoldi');
+        return;
+    }
+
+    Orion.UseObject(bag[0]);
+
+    if (Orion.WaitForTarget(3000)) {
+        Orion.TargetObject(gold[0]);
+        Orion.CharPrint(Player.Serial(), 65, 'Oro spedito in banca');
+    } else {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessun target ricevuto da Bag of Sending');
+    }
+
+    Orion.Wait(800);
+    Orion.ResumeScript('RaccogliSoldi');
+    Orion.CharPrint(Player.Serial(), 65, 'Golddigger riattivato');
+}
+
+// =====================================================
+// KHALDUN / MOUNT / BONE CUTTER / OBJECT LISTS
+// =====================================================
+
+function SelectOrResetKhaldunWeapon() {
+    var varName = 'kaldun';
+
+    if (Orion.FindObject(varName)) {
+        Orion.RemoveObject(varName);
+        Shared.RemoveVar(varName + '_name');
+        Orion.CharPrint(Player.Serial(), 33, 'Arma KALDHUN resettata!');
+    } else {
+        Orion.CharPrint(Player.Serial(), 55, 'Seleziona arma KALDHUN');
+
+        if (Orion.WaitForAddObject(varName, 15000)) {
+            var item = Orion.FindObject(varName);
+
+            if (item) {
+                Shared.AddVar(varName + '_name', item.Name());
+                Orion.CharPrint(Player.Serial(), 65, 'Arma KALDHUN salvata: ' + item.Name());
+            }
+        } else {
+            Orion.CharPrint(Player.Serial(), 33, 'Tempo scaduto: nessuna arma selezionata.');
+        }
+    }
+
+    GUI();
+}
+
+function MountPetManager() {
+    Orion.CharPrint(Player.Serial(), 55, 'Seleziona un pet da salvare');
+
+    if (Orion.WaitForAddObject('mount_temp', 25000)) {
+        var pet = Orion.FindObject('mount_temp');
+
+        if (pet) {
+            Orion.AddFindList('savedMounts', pet.Graphic(), pet.Color(), pet.Name() || 'Pet');
+            Orion.CharPrint(Player.Serial(), 65, 'Pet aggiunto alla lista: ' + (pet.Name() || 'Pet'));
+        }
+    }
+
+    GUI();
+}
+
+function IsMountedCompagnone() {
+    try {
+        var m1 = Orion.ObjAtLayer('Mount');
+        if (m1 !== null) return true;
+    } catch (e1) {}
+
+    try {
+        var m2 = Orion.ObjAtLayer('myMount');
+        if (m2 !== null) return true;
+    } catch (e2) {}
+
+    try {
+        if (typeof Player.Mount === 'function') {
+            var m3 = Player.Mount();
+            if (m3 && m3 !== null && m3 !== '0x00000000' && m3 !== '0x000') return true;
+        }
+    } catch (e3) {}
+
+    try {
+        if (typeof Player.Mounted === 'function' && Player.Mounted()) return true;
+    } catch (e4) {}
+
+    return false;
+}
+
+function AutoMount() {
+    var lastFollowSay = 0;
+    var lastMountTry = 0;
+    var lastPrint = 0;
+
+    while (!Player.Dead()) {
+        if (IsMountedCompagnone()) {
+            Orion.SetGlobal('NeedMount', 'false');
+            Orion.Wait(400);
+            continue;
+        }
+
+        Orion.SetGlobal('NeedMount', 'true');
+        Orion.WarMode(false);
+
+        try { Orion.StopWalking(); } catch (e0) {}
+        try { Orion.CancelWaitTarget(); } catch (e1) {}
+
+        var now = Orion.Now();
+
+        if (now - lastFollowSay > 2500) {
+            Orion.Say('All follow Me');
+            lastFollowSay = now;
+        }
+
+        if (now - lastPrint > 4000) {
+            Orion.Print(33, 'AutoMount: sono a piedi, provo a rimontare.');
+            lastPrint = now;
+        }
+
+        if (Orion.BuffExists('dismount')) {
+            Orion.Wait(700);
+            continue;
+        }
+
+        var pets = Orion.FindList('savedMounts', 'ground', null, 18);
+        var nearestPet = null;
+
+        for (var i = 0; i < pets.length; i++) {
+            var pet = Orion.FindObject(pets[i]);
+            if (!pet || pet.Hits() <= 0) continue;
+
+            Orion.GetStatus(pet.Serial());
+            Orion.Wait(50);
+
+            if (pet.Poisoned() && Player.Mana() >= 10) {
+                Orion.Cast('Cleanse by Fire');
+
+                if (Orion.WaitForTarget(1200)) {
+                    Orion.TargetObject(pet.Serial());
+                    Orion.Wait(250);
+                }
+            }
+
+            if (pet.YellowHits() && Player.Mana() >= 20) {
+                Orion.Cast('Remove Curse');
+
+                if (Orion.WaitForTarget(1200)) {
+                    Orion.TargetObject(pet.Serial());
+                    Orion.Wait(300);
+                }
+            }
+
+            if (!nearestPet || pet.Distance() < nearestPet.Distance()) {
+                nearestPet = pet;
+            }
+        }
+
+        if (nearestPet) {
+            if (nearestPet.Distance() <= 3) {
+                if (now - lastMountTry > 800) {
+                    Orion.WarMode(false);
+
+                    try { Orion.StopWalking(); } catch (e2) {}
+
+                    Orion.UseObject(nearestPet.Serial());
+                    lastMountTry = now;
+                    Orion.Wait(600);
+
+                    if (IsMountedCompagnone()) {
+                        Orion.SetGlobal('NeedMount', 'false');
+                        Orion.Print(65, 'AutoMount: rimontato.');
+                        Orion.Wait(400);
+                        continue;
+                    }
+                }
+            } else {
+                if (now - lastFollowSay > 2500) {
+                    Orion.Say('All follow Me');
+                    lastFollowSay = now;
+                }
+
+                try { Orion.StopWalking(); } catch (e3) {}
+                Orion.Wait(350);
+            }
+        } else {
+            if (now - lastFollowSay > 2500) {
+                Orion.Say('All follow Me');
+                lastFollowSay = now;
+            }
+
+            Orion.Wait(350);
+        }
+
+        Orion.Wait(100);
+    }
+
+    Orion.SetGlobal('NeedMount', 'false');
+}
+
+function SetKnifeForBoneCutter() {
+    var knife = Orion.FindObject('bone_knife');
+    var savedKnifeName = Shared.GetVar('bone_knife_name');
+
+    if (knife || savedKnifeName) {
+        Orion.RemoveObject('bone_knife');
+        Shared.RemoveVar('bone_knife_name');
+        Orion.CharPrint(Player.Serial(), 33, 'Coltello BoneCutter resettato!');
+    } else {
+        Orion.CharPrint(Player.Serial(), 55, 'Seleziona il coltello per il BoneCutter!');
+
+        if (Orion.WaitForAddObject('bone_knife', 25000)) {
+            var selected = Orion.FindObject('bone_knife');
+
+            if (selected) {
+                Orion.GetStatus(selected.Serial());
+                Shared.AddVar('bone_knife_name', selected.Name());
+            }
+        }
+    }
+
+    GUI();
+}
+
+function GetKnifeName() {
+    var knife = Orion.FindObject('bone_knife');
+
+    if (knife) {
+        Orion.GetStatus(knife.Serial());
+
+        var name = knife.Name();
+        if (name && name.length > 0) Shared.AddVar('bone_knife_name', name);
+
+        return name && name.length > 0 ? name : '[caricamento...]';
+    }
+
+    var savedName = Shared.GetVar('bone_knife_name');
+    return savedName ? savedName : 'non selezionato';
+}
+
+function SetOggettoDaCercare() {
+    Orion.CharPrint(Player.Serial(), 55, 'Seleziona un oggetto da aggiungere alla lista');
+
+    if (Orion.WaitForAddObject('oggetto_terra', 25000)) {
+        var obj = Orion.FindObject('oggetto_terra');
+
+        if (obj) {
+            var graphic = '0x' + parseInt(obj.Graphic()).toString(16).toUpperCase();
+            var color = '0x' + parseInt(obj.Color()).toString(16).toUpperCase();
+            var name = obj.Name() || 'Oggetto sconosciuto';
+
+            Orion.AddFindList('oggettiaterra', graphic, color, name);
+            Orion.CharPrint(Player.Serial(), 65, 'Aggiunto: ' + graphic + ' : ' + color + ' -> ' + name);
+        }
+    }
+
+    GUI();
+}
+
+function GetCercaOggettoName() {
+    var obj = Orion.FindObject('oggetto_terra');
+
+    if (obj) {
+        Orion.GetStatus(obj.Serial());
+
+        var name = obj.Name();
+
+        if (name && name.length > 0) Shared.AddVar('oggetto_terra_name', name);
+        return name && name.length > 0 ? name : '[caricamento...]';
+    }
+
+    var manualID = Shared.GetVar('graphic_id_manuale');
+    if (manualID) return manualID;
+
+    var saved = Shared.GetVar('oggetto_terra_name');
+    return saved ? saved : 'non selezionato';
+}
+
+function SelezionaOggettoDaAssicurare() {
+    Orion.CharPrint(Player.Serial(), 55, "Seleziona l'oggetto da assicurare");
+
+    if (Orion.WaitForAddObject('oggetto_da_insurare', 25000)) {
+        var obj = Orion.FindObject('oggetto_da_insurare');
+
+        if (obj) {
+            var graphic = '0x' + parseInt(obj.Graphic()).toString(16).toUpperCase();
+            var color = '0x' + parseInt(obj.Color()).toString(16).toUpperCase();
+            var name = obj.Name() || 'Oggetto';
+
+            Orion.AddFindList('insura', graphic, color, name);
+            Orion.CharPrint(Player.Serial(), 65, 'Aggiunto a lista insura: ' + name + ' (' + graphic + ')');
+            Orion.PlayWav('C:\\Orion Launcher\\OA\\beep.wav');
+        }
+    }
+
+    GUI();
+}
+
+function AggiungiAutoloot() {
+    Orion.CharPrint(Player.Serial(), 55, "Seleziona l'oggetto da autolootare");
+
+    if (Orion.WaitForAddObject('oggetto_da_autolootare', 25000)) {
+        var obj = Orion.FindObject('oggetto_da_autolootare');
+
+        if (obj) {
+            var graphic = '0x' + parseInt(obj.Graphic()).toString(16).toUpperCase();
+            var color = '0x' + parseInt(obj.Color()).toString(16).toUpperCase();
+            var name = obj.Name() || 'Oggetto';
+
+            Orion.AddFindList('generico', graphic, color, name);
+            Orion.CharPrint(Player.Serial(), 65, 'Aggiunto a lista autoloot: ' + name + ' (' + graphic + ')');
+        }
+    }
+
+    GUI();
+}
+
+// =====================================================
+// MOVEMENT / UTILITY
+// =====================================================
+
+function SbloccaSeFermo() {
+    var lastX = Player.X(), lastY = Player.Y(), lastZ = Player.Z();
+    var stayCounter = 0;
+
+    while (!Player.Dead()) {
+        if (Orion.GetGlobal('StopAllScripts') === 'true') return;
+
+        if (Player.X() === lastX && Player.Y() === lastY && Player.Z() === lastZ) stayCounter++;
+        else {
+            lastX = Player.X(); lastY = Player.Y(); lastZ = Player.Z();
+            stayCounter = 0;
+        }
+
+        if (stayCounter >= 55) {
+            stayCounter = 0;
+            Orion.CharPrint(Player.Serial(), 33, '*SBORRATO*');
+
+            var path = [5,5,5,6,6,6,2,2,2,7,7,7];
+
+            for (var i = 0; i < path.length; i++) {
+                Orion.Step(path[i], true);
+                Orion.Wait(Orion.ObjAtLayer('Mount') !== null ? 115 : 215);
+            }
+        }
+
+        Orion.Wait(200);
+    }
+}
+
+function AutoHide() {
+    while (true) {
+        Orion.UseSkill('Hiding');
+        Orion.Wait(1000);
+
+        if (Player.Hidden()) return;
+
+        Orion.Print('Non nascosto, riprovo tra 9 secondi...');
+        Orion.Wait(10000);
+    }
+}
+
+function ClickEverythingAround1Tile() {
+    Orion.CharPrint(Player.Serial(), 23, 'CLICCA TUTTO AVVIATO');
+    Orion.Print('CLICCA TUTTO AVVIATO');
+
+    while (true) {
+        var objects = Orion.FindTypeEx('any', 'any', 'ground', 'any', 1);
+
+        for (var i = 0; i < objects.length; i++) {
+            var obj = objects[i];
+
+            if (obj && obj.Serial() !== Player.Serial()) {
+                Orion.Print('Clicking object: ' + obj.Name() + ' at ' + obj.X() + ',' + obj.Y());
+                Orion.UseObject(obj.Serial());
+                Orion.Wait(100);
+            }
+        }
+
+        Orion.Wait(100);
+    }
+}
+
+function WatchClickEverythingStopped() {
+    while (true) {
+        if (Orion.InJournal("Script 'ClickEverythingAround1Tile' stopped.")) {
+            Orion.CharPrint(Player.Serial(), 23, 'CLICCA TUTTO STOPPATO');
+            Orion.Print('CLICCA TUTTO STOPPATO');
+
+            Orion.ClearJournal();
+            Orion.Wait(1000);
+        }
+
+        Orion.Wait(250);
+    }
+}
+
+function HideCorpse() {
+    while (!Player.Dead()) {
+        var corpi = Orion.FindType('0x2006', '0xFFFF', 'ground');
+
+        for (var i = 0; i < corpi.length; i++) {
+            var corpo = Orion.FindObject(corpi[i]);
+            if (corpo && corpo.Distance() <= 18) Orion.Hide(corpo.Serial());
+        }
+
+        Orion.Wait(100);
+    }
+}
+
+function CercaOggettoTerra() {
+    Orion.Print('0x60', 'Cercatore oggetti AVVIATO');
+    Shared.AddVar('cerca_attivo', true);
+
+    while (!Player.Dead() && Shared.GetVar('cerca_attivo')) {
+        var items = Orion.FindList('oggettiaterra', 'ground', null, 24);
+
+        for (var i = 0; i < items.length; i++) {
+            var obj = Orion.FindObject(items[i]);
+
+            if (obj) {
+                Orion.CharPrint(obj.Serial(), 65, '*TROVATO*');
+                Orion.PlayWav('C:\\beep.wav');
+                Orion.Wait(200);
+                Orion.CharPrint(obj.Serial(), 65, '*TROVATO*');
+                Orion.Wait(200);
+                Orion.CharPrint(obj.Serial(), 65, '*TROVATO*');
+            }
+        }
+
+        Orion.Wait(500);
+    }
+
+    Orion.Print('0x20', 'Cercatore oggetti STOPPATO');
+    Shared.RemoveVar('cerca_attivo');
+    GUI();
+}
+
+// =====================================================
+// EQUIP / SCAVENGER
+// =====================================================
+
+function ItemTextContains(item, needle) {
+    if (!item) return false;
+
+    var text = '';
+
+    try { text += ' ' + (item.Name() || ''); } catch (e) {}
+    try { text += ' ' + (item.Properties() || ''); } catch (e2) {}
+
+    return text.toLowerCase().indexOf(needle.toLowerCase()) !== -1;
+}
+
+function IsItemEquipped(item) {
+    if (!item) return false;
+
+    var right = Orion.ObjAtLayer('RightHand');
+    var left = Orion.ObjAtLayer('LeftHand');
+    var serial = String(item.Serial()).toLowerCase();
+
+    if (right && String(right.Serial()).toLowerCase() === serial) return true;
+    if (left && String(left.Serial()).toLowerCase() === serial) return true;
+
+    return false;
+}
+
+function GetItemColorDec(item) {
+    if (!item) return -1;
+
+    var color = '';
+    try { color = item.Color(); } catch (e) { return -1; }
+
+    if (color === undefined || color === null) return -1;
+
+    color = String(color).replace(/^\s+|\s+$/g, '');
+
+    if (color.indexOf('0x') === 0 || color.indexOf('0X') === 0) {
+        return parseInt(color, 16);
+    }
+
+    return parseInt(color, 10);
+}
+
+function IsLavaInfusedWeapon(item) {
+    if (!item) return false;
+
+    if (ItemTextContains(item, 'lava infused')) return true;
+    if (ItemTextContains(item, 'searing')) return true;
+
+    return false;
+}
+
+function IsLavaInfusedOn(weapon) {
+    return GetItemColorDec(weapon) === 1174;
+}
+
+function GetEquippedLavaInfusedWeapon() {
+    var right = Orion.ObjAtLayer('RightHand');
+    var left = Orion.ObjAtLayer('LeftHand');
+
+    // Controllo a monte: prima guarda sempre cosa hai realmente in mano.
+    // Cosi' funziona con qualunque dress/rail/macro, anche se non passa dai tasti GUI.
+    if (IsLavaInfusedWeapon(right)) return right;
+    if (IsLavaInfusedWeapon(left)) return left;
+
+    // Fallback originale: seriale salvato come bladed_searing.
+    var savedSearing = Orion.FindObject('bladed_searing');
+
+    if (savedSearing && IsItemEquipped(savedSearing)) return savedSearing;
+
+    return null;
+}
+
+function TryUseLavaInfusedContextMenu(weapon) {
+    if (!weapon) return false;
+
+    // Colore acceso: 0x0496 / dec 1174.
+    // Colore spento visto da te: dec 2500.
+    // Se e' gia' accesa non richiama il context menu, per non spegnerla.
+    if (IsLavaInfusedOn(weapon)) {
+        return true;
+    }
+
+    Orion.Wait(100);
+    Orion.RequestContextMenu(weapon.Serial());
+    Orion.WaitContextMenuID(weapon.Serial(), 0);
+    Orion.Wait(250);
+
+    if (IsLavaInfusedOn(weapon)) {
+        Orion.CharPrint(Player.Serial(), 65, '*Lava Infused accesa*');
+    } else {
+        Orion.CharPrint(Player.Serial(), 33, '*Tentativo accensione Lava Infused*');
+    }
+
+    return true;
+}
+
+function CheckAndActivateLavaInfused(force) {
+    var weapon = GetEquippedLavaInfusedWeapon();
+
+    if (!weapon) return false;
+
+    if (IsLavaInfusedOn(weapon)) return true;
+
+    var serial = String(weapon.Serial()).toLowerCase();
+    var lastSerial = Shared.GetVar('lava_infused_last_serial');
+    var lastTry = parseInt(Shared.GetVar('lava_infused_last_try') || '0', 10);
+    var now = Orion.Now();
+
+    // A monte sempre attivo, ma senza spammare context menu ogni 300ms.
+    // Se e' spenta, riprova ogni 2 secondi finche' non diventa colore 1174.
+    if (!force && lastSerial === serial && (now - lastTry) < 2000) return true;
+
+    Shared.AddVar('lava_infused_last_serial', serial);
+    Shared.AddVar('lava_infused_last_try', String(now));
+
+    return TryUseLavaInfusedContextMenu(weapon);
+}
+
+function AutoReEquip() {
+    Orion.Print('Monitor Disarm attivo...');
+
+    while (!Player.Dead()) {
+        if (Orion.BuffExists('Disarm')) {
+            while (Orion.BuffExists('Disarm')) Orion.Wait(300);
+
+            var arma = Orion.FindObject('kaldun');
+
+            if (arma) {
+                Orion.Equip(arma.Serial());
+                Orion.CharPrint(Player.Serial(), 65, 'Equipaggiata arma: ' + arma.Name());
+            } else {
+                Orion.CharPrint(Player.Serial(), 33, 'Nessuna arma salvata (kaldun)');
+            }
+        }
+
+        if (Player.Str() > 125) {
+            var oggetto = Orion.FindObject('0x404A4CAC');
+
+            if (oggetto && oggetto.Container() == Orion.ObjAtLayer('Backpack').Serial()) {
+                Orion.Equip(oggetto.Serial());
+                Orion.CharPrint(Player.Serial(), 65, 'Equipaggiato oggetto per forza > 125');
+            }
+        }
+        if (Orion.GetGlobal('StopAllScripts') !== 'true') {
+            CheckAndActivateLavaInfused(false);
+        }
+		WatchClickEverythingStopped();
+        Orion.Wait(300);
+    }
+}
+
+function BoneScavengerSimple() {
+    var ignoraSerial = parseInt('0x4053424E');
+    var piccozzaID = '0x0E86';
+    var boneGraphics = ['0xAF1E', '0xA331', '0xABCE', '0xABCF', '0xABD0'];
+
+    var picca = Orion.FindType(piccozzaID, '-1', 'backpack');
+
+    if (!picca.length) {
+        Orion.CharPrint(Player.Serial(), 33, 'Piccozza non trovata nello zaino!');
+        return;
+    }
+
+    Orion.Equip(picca[0]);
+    Orion.CharPrint(Player.Serial(), 65, 'Piccozza equipaggiata');
+
+    while (!Player.Dead()) {
+        var bones = Orion.FindTypeEx(boneGraphics.join('|'), '-1', 'ground', 'item', 14);
+
+        for (var i = 0; i < bones.length; i++) {
+            var bone = bones[i];
+
+            if (!bone || bone.Serial() === ignoraSerial) continue;
+
+            Orion.CharPrint(bone.Serial(), 65, '*TROVATO*');
+            Orion.Wait(200);
+
+            Orion.UseObject(bone.Serial());
+            Orion.Wait(300);
+
+            Orion.UseObject(picca[0]);
+
+            if (Orion.WaitForTarget(1000)) {
+                Orion.TargetObject(bone.Serial());
+                Orion.Wait(300);
+            }
+        }
+
+        Orion.Wait(500);
+    }
+}
+
+function BoneScavengerEquipped() {
+    var itemColor = '0x05DD';
+    var ignoraSerial = '0x4053424E';
+
+    Orion.Print('0x60', 'Script AVVIATO');
+
+    while (!Player.Dead()) {
+        var picca = Orion.ObjAtLayer(1);
+
+        if (!picca || picca.Graphic() !== '0x0E86') picca = Orion.ObjAtLayer(2);
+
+        if (!picca || picca.Graphic() !== '0x0E86') {
+            var findInPack = Orion.FindType('0x0E86', '-1', 'backpack', 'item|recurse');
+            if (findInPack.length > 0) picca = Orion.FindObject(findInPack[0]);
+        }
+
+        if (!picca) {
+            Orion.Print(33, 'Piccozza non trovata.');
+            Orion.Wait(2000);
+            continue;
+        }
+
+        var objects = Orion.FindTypeEx('any', itemColor, 'ground', 'item', 33);
+
+        for (var i = 0; i < objects.length; i++) {
+            var obj = objects[i];
+
+            if (!obj || obj.Serial() === ignoraSerial) continue;
+
+            Orion.CharPrint(obj.Serial(), 65, '*OGGETTO RILEVATO*');
+            Orion.CancelTarget();
+            Orion.UseObject(picca.Serial());
+
+            if (Orion.WaitForTarget(1500)) {
+                Orion.TargetObject(obj.Serial());
+                Orion.Wait(100);
+                Orion.Ignore(obj.Serial());
+            }
+        }
+
+        Orion.Wait(200);
+    }
+}
+
+// =====================================================
+// SMELTING
+// =====================================================
+
+const CALDERONE_SERIAL = '0x407AA952';
+const COLORE_GENERICO = '0x0AE0';
+const GRAFICA_SABBIA = '0xA3E8';
+const NOME_UOVA_PARZIALE = 'Umbrascale Dragon Egg';
+
+var ignoreList = [];
+
+function SmeltAndStack() {
+    Orion.Print(68, '--- Inizio Ciclo Smelting ---');
+    ignoreList = [];
+
+    while (!Player.Dead()) {
+        var itemToSmelt = null;
+        var colorItems = Orion.FindType('any', COLORE_GENERICO, 'backpack');
+
+        for (var i = 0; i < colorItems.length; i++) {
+            if (ignoreList.indexOf(colorItems[i]) === -1) {
+                itemToSmelt = colorItems[i];
+                break;
+            }
+        }
+
+        if (!itemToSmelt) {
+            var allInBackpack = Orion.FindType('any', 'any', 'backpack');
+
+            for (var j = 0; j < allInBackpack.length; j++) {
+                var serial = allInBackpack[j];
+                if (ignoreList.indexOf(serial) !== -1) continue;
+
+                var obj = Orion.FindObject(serial);
+
+                if (obj && obj.Exists()) {
+                    var props = obj.Properties();
+
+                    if (props && props.indexOf(NOME_UOVA_PARZIALE) !== -1) {
+                        itemToSmelt = serial;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (itemToSmelt) {
+            Orion.Print(55, 'Provo a smeltare: ' + itemToSmelt);
+            Orion.UseObject(CALDERONE_SERIAL);
+
+            if (Orion.WaitForTarget(2000)) {
+                Orion.TargetObject(itemToSmelt);
+                Orion.Wait(1200);
+            }
+
+            if (Orion.FindObject(itemToSmelt)) {
+                Orion.Print(33, 'Oggetto non smeltato. Lo ignoro e procedo.');
+                ignoreList.push(itemToSmelt);
+            }
+
+            Orion.Wait(100);
+        } else {
+            Orion.Print(33, 'Nessun altro oggetto trovato. Raggruppo la sabbia...');
+            StackSand();
+            break;
+        }
+    }
+
+    Orion.Print(68, '--- Operazione Completata ---');
+}
+
+function StackSand() {
+    var sandPiles = Orion.FindType(GRAFICA_SABBIA, 'any', 'backpack');
+
+    if (sandPiles.length < 2) {
+        Orion.Print(25, 'Meno di 2 pile di sabbia trovate. Nulla da unire.');
+        return;
+    }
+
+    var masterPile = sandPiles[0];
+
+    for (var i = 1; i < sandPiles.length; i++) {
+        var currentPile = sandPiles[i];
+
+        if (currentPile !== masterPile && Orion.FindObject(currentPile)) {
+            Orion.MoveItem(currentPile, 0, masterPile);
+            Orion.Wait(600);
+        }
+    }
+
+    Orion.Print(25, 'Sabbia raggruppata.');
+}
+
+function StartSmelting() {
+    Orion.Exec('SmeltAndStack');
+}
+
+// =====================================================
+// SMALL UTILITIES
+// =====================================================
+
+function Message() {
+    var x = Player.X(), y = Player.Y();
+
+    if (x === 28 && y === 212) Orion.Say('Ord');
+    else if (x === 43 && y === 212) Orion.Say('An-Ord');
+    else Orion.Say('*bank* *recsu* *recdu* *guards* *cross*');
+}
+
+function CheckObjectColorNumber() {
+    Orion.Print(55, 'Seleziona oggetto o mob per leggere il colore...');
+
+    Orion.AddObject('check_color_target');
+
+    while (Orion.HaveTarget()) Orion.Wait(50);
+
+    var obj = Orion.FindObject('check_color_target');
+
+    if (!obj) {
+        Orion.Print(33, 'Nessun oggetto selezionato.');
+        return;
+    }
+
+    var colorHex = obj.Color();
+    var colorDec = parseInt(colorHex, 16);
+
+    Orion.Print(66, 'Name: ' + obj.Name());
+    Orion.Print(66, 'Serial: ' + obj.Serial());
+    Orion.Print(66, 'Graphic: ' + obj.Graphic());
+    Orion.Print(66, 'Color Hex: ' + colorHex);
+    Orion.Print(66, 'Color Dec: ' + colorDec);
+}
+
+function ShowKarmaFama() {
+    Orion.ClearJournal();
+    Orion.Say('[premium');
+
+    if (Orion.WaitForGump(1000)) {
+        var gump0 = Orion.GetGump('last');
+
+        if ((gump0 !== null) && (!gump0.Replayed()) && (gump0.ID() === '0x5CB83289')) {
+            gump0.Select(Orion.CreateGumpHook(3));
+            Orion.Wait(200);
+        }
+    }
+
+    var journalLine = Orion.InJournal('Fame');
+
+    if (journalLine) {
+        var text = '';
+
+        if (journalLine.Text) text = journalLine.Text();
+        else if (journalLine.Message) text = journalLine.Message();
+        else text = '' + journalLine;
+
+        Orion.Print(65, 'Fame/Karma: ' + text);
+
+        var match = text.match(/Fame\s*=\s*(-?\d+)\s+Karma\s*=\s*(-?\d+)/i);
+
+        if (match) {
+            var fame = Number(match[1]);
+            var karma = Number(match[2]);
+
+            Orion.CharPrint(Player.Serial(), 1153, '*FAMA* : ' + fame);
+            Orion.Wait(150);
+
+            if (karma < 0) {
+                Orion.CharPrint(Player.Serial(), 33, '*KARMA* : ' + karma);
+            } else {
+                Orion.CharPrint(Player.Serial(), 88, '*KARMA* : ' + karma);
+            }
+        } else {
+            Orion.CharPrint(Player.Serial(), 33, '*Formato Fame/Karma non letto*');
+            Orion.Print(33, 'Testo ricevuto: ' + text);
+        }
+    } else {
+        Orion.CharPrint(Player.Serial(), 33, '*Fame/Karma non trovati nel journal*');
+    }
+
+    Orion.Wait(100);
+
+    var gump1 = Orion.GetGump('last');
+    if (gump1 !== null) gump1.Close();
+}
+
+function BruciaNido() {
+    // 1. Salva l'arma equipaggiata in memoria e disequipaggiala
+    var rightHand = Orion.ObjAtLayer('RightHand');
+    var leftHand = Orion.ObjAtLayer('LeftHand');
+    var weaponToReequip = null;
+    
+    if (rightHand != null) {
+        weaponToReequip = rightHand.Serial();
+        Orion.Unequip('RightHand');
+        Orion.Wait(600);
+    } else if (leftHand != null) {
+        weaponToReequip = leftHand.Serial();
+        Orion.Unequip('LeftHand');
+        Orion.Wait(600);
+    }
+
+    // 2. Trova la Torcia nel backpack e la impugna (UseObject)
+    var torches = Orion.FindType('0x0F6B', 'any', 'backpack');
+    if (torches.length === 0) {
+        Orion.Print('25', 'Nessuna torcia trovata nel backpack!');
+        // Se non trova la torcia, rimette l'arma e interrompe lo script
+        if (weaponToReequip != null) Orion.Equip(weaponToReequip);
+        return;
+    }
+    var torchSerial = torches[0];
+    Orion.UseObject(torchSerial);
+    Orion.Wait(600); // Pausa per far recepire al server l'equipaggiamento
+
+    // 3. Trova il Dragon Nest a terra
+    var nests = Orion.FindType('0xB2D5', 'any', 'ground', 'fast', 3);
+    if (nests.length > 0) {
+        var nestSerial = nests[0];
+        
+        // Apre il Context Menu del nido e seleziona l'opzione 0
+        Orion.RequestContextMenu(nestSerial);
+        Orion.WaitContextMenuID(nestSerial, 0);
+        
+        // 4. Attende il Gump FISSO e preme il tasto di conferma
+        if (Orion.WaitForGump(1000)) {
+            var gump0 = Orion.GetGump('last');
+            // Controllo rigoroso sul tuo Gump ID (0x7BCCB319)
+            if (gump0 !== null && !gump0.Replayed() && gump0.ID() === '0x7BCCB319') {
+                gump0.Select(Orion.CreateGumpHook(2));
+                Orion.Wait(500); 
+            }
+        }
+    } else {
+        Orion.Print('33', 'Nessun Dragon Nest trovato nelle vicinanze!');
+    }
+
+    // 5. Disequipaggia la torcia 
+    Orion.Unequip('RightHand'); 
+    Orion.Unequip('LeftHand');
+    Orion.Wait(600);
+
+    // 6. Rimette l'arma iniziale in base al seriale salvato
+    if (weaponToReequip != null) {
+        Orion.Equip(weaponToReequip);
+        Orion.Wait(600);
+        Orion.Print('65', 'Arma riequipaggiata. Nido bruciato!');
+    }
+}
