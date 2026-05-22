@@ -1281,7 +1281,7 @@ function SaveRepairBenchItem(toolType) {
     toolType = CleanRepairString(toolType);
 
     var alreadyExists = RepairGraphicAlreadyExists(graphic);
-    var filePath = Orion.CurrentScriptDirPath() + '/repair bench.oajs';
+    var filePath = Orion.CurrentScriptDirPath() + '/COMPAGNONE LIGHT_REPAIRBENCH.oajs';
 
     var line =
         "\n// Added by Compagnone Repair Bench" +
