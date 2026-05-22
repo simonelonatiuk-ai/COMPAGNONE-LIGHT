@@ -32,7 +32,7 @@ var HUE_BUTTON_PURPLE = '23';
 // =====================================================
 
 var COMPAGNONE_VERSION_LABEL = 'LIGHT 1.2';
-var COMPAGNONE_POSITIONS_FILE = 'OA/COMPAGNONE LIGHT_POSITIONS.oajs';
+var COMPAGNONE_POSITIONS_FILE = 'COMPAGNONE LIGHT_POSITIONS.oajs';
 // Bottone toggle V3: bordo sempre visibile, colore solo interno quando attivo.
 var LIGHT_TOGGLE_BORDER_GUMP = 0x4B9;
 var LIGHT_TOGGLE_FILL_GUMP = 0x2716;
@@ -1540,44 +1540,36 @@ function ResetDurabilityGuiPos() {
 // POSITION PERSISTENCE
 // =====================================================
 
-var COMPAGNONE_POSITIONS_FILE = 'COMPAGNONE_POSITIONS.oajs';
-
 function LoadGuiPositionsFromFile() {
-    // Queste variabili arrivano da //#include compagnone_positions.oajs
-    if (typeof SAVED_COMPAGNONE_GUI_X !== 'undefined') {
-        Shared.AddVar('compagnone_gui_x', SAVED_COMPAGNONE_GUI_X);
+    if (typeof SAVED_LIGHT_GUI_X !== 'undefined') {
+        Shared.AddVar('compagnone_gui_x', SAVED_LIGHT_GUI_X);
     }
-
-    if (typeof SAVED_COMPAGNONE_GUI_Y !== 'undefined') {
-        Shared.AddVar('compagnone_gui_y', SAVED_COMPAGNONE_GUI_Y);
+    if (typeof SAVED_LIGHT_GUI_Y !== 'undefined') {
+        Shared.AddVar('compagnone_gui_y', SAVED_LIGHT_GUI_Y);
     }
-
-    if (typeof SAVED_DURABILITY_GUI_X !== 'undefined') {
-        Shared.AddVar('durability_gui_x', SAVED_DURABILITY_GUI_X);
+    if (typeof SAVED_LIGHT_DURA_X !== 'undefined') {
+        Shared.AddVar('durability_gui_x', SAVED_LIGHT_DURA_X);
     }
-
-    if (typeof SAVED_DURABILITY_GUI_Y !== 'undefined') {
-        Shared.AddVar('durability_gui_y', SAVED_DURABILITY_GUI_Y);
+    if (typeof SAVED_LIGHT_DURA_Y !== 'undefined') {
+        Shared.AddVar('durability_gui_y', SAVED_LIGHT_DURA_Y);
     }
 }
 
 function SaveGuiPositionsToFile() {
-    // Aggiunto Orion.CurrentScriptDirPath() per far puntare il salvataggio alla cartella corretta!
     var filePath = Orion.CurrentScriptDirPath() + '/' + COMPAGNONE_POSITIONS_FILE;
     var file = Orion.NewFile();
-    
     var content =
-        "var SAVED_COMPAGNONE_GUI_X = " + GetCompagnoneGuiX() + ";\n" +
-        "var SAVED_COMPAGNONE_GUI_Y = " + GetCompagnoneGuiY() + ";\n" +
-        "var SAVED_DURABILITY_GUI_X = " + GetDurabilityGuiX() + ";\n" +
-        "var SAVED_DURABILITY_GUI_Y = " + GetDurabilityGuiY() + ";\n";
+        "var SAVED_LIGHT_GUI_X = " + GetCompagnoneGuiX() + ";\n" +
+        "var SAVED_LIGHT_GUI_Y = " + GetCompagnoneGuiY() + ";\n" +
+        "var SAVED_LIGHT_DURA_X = " + GetDurabilityGuiX() + ";\n" +
+        "var SAVED_LIGHT_DURA_Y = " + GetDurabilityGuiY() + ";\n";
         
     file.Open(filePath, true);
     Orion.Wait(50);
     file.Write(content);
     file.Close();
 
-    Orion.Print(65, '[2] Posizioni GUI salvate su file:');
+    Orion.Print(65, '[2] Posizioni GUI LIGHT salvate su file:');
     Orion.Print(65, filePath);
 }
 
