@@ -1,0 +1,551 @@
+function RepairGear() {
+    MergeCustomRepairArr();
+    MergeRuntimeRepairOverrides();
+
+    var minDura = 200;
+    var backpack = Orion.FindObject("backpack");
+    
+    if (!backpack) {
+        Orion.Print("Errore: Zaino non trovato!");
+        return;
+    }
+
+    // Trova la repair bench a terra (raggio 3 caselle)
+    var repairBench = Orion.FindType("0xA278|0xA277|0xA27F|0xA27E", "0x0", "ground", 3);
+    if (!repairBench.length) {
+        Orion.Print("Errore: Repair bench non trovata vicino a te!");
+        return;
+    }
+
+    Orion.Print("Interazione con la repair bench...");
+    Orion.UseObject(repairBench[0]);
+
+    // Attendi l'apertura del gump di riparazione
+    if (!Orion.WaitForGump(2000)) {
+        Orion.Print("Errore: Gump di riparazione non apparso.");
+        return;
+    }
+
+    // Trova tutti gli oggetti nello zaino
+    var items = Orion.FindType("any", "any", backpack.Serial());
+    if (!items.length) {
+        Orion.Print("Zaino vuoto.");
+        return;
+    }
+
+    for (var i = 0; i < items.length; i++) {
+        var item = Orion.FindObject(items[i]);
+        if (!item) continue;
+
+        var properties = item.Properties();
+        var currentGraphic = item.Graphic().toLowerCase();
+        var objInd = -1;
+
+for (var j = itemArr.length - 3; j >= 0; j -= 3) {
+    if (itemArr[j].toLowerCase() === currentGraphic) {
+        objInd = j;
+        break;
+    }
+}
+
+        // 1. Salta se l'oggetto è Imbued
+        if (Orion.Contains(properties, "Imbued")) {
+            continue;
+        }
+
+        // 2. Controllo Durabilità con Regex specifica (Cerca il formato "X / Y")
+        // Questo evita di leggere "Durability 70%" dei materiali speciali
+        var duraMatch = properties.match(/Durability\s+(\d+)\s+\/\s+(\d+)/i);
+
+        if (duraMatch && objInd >= 0) {
+            var currentDura = Number(duraMatch[1]);
+            var maxDura = Number(duraMatch[2]);
+
+            // Ripara se sotto la soglia E se non è già al massimo
+            if (currentDura < minDura && currentDura < maxDura) {
+                Orion.Print("Riparazione: " + item.Name() + " [" + currentDura + "/" + maxDura + "]");
+
+                var repairType = itemArr[objInd + 2];
+                var gumpHook = 0;
+
+                switch (repairType) {
+                    case "blacksmith": gumpHook = 10; break;
+                    case "tailor":     gumpHook = 11; break;
+                    case "tinker":     gumpHook = 12; break;
+                    case "carpenter":  gumpHook = 13; break;
+                    default: continue;
+                }
+
+                var gump = Orion.GetGump("last");
+                if (gump) {
+                    gump.Select(Orion.CreateGumpHook(gumpHook));
+                    
+                    if (Orion.WaitForTarget(2000)) {
+                        Orion.TargetObject(item.Serial());
+                        Orion.Wait(600); // Pausa per evitare lag/blocchi
+                    }
+                }
+            }
+        }
+    }
+
+    Orion.Print("Riparazioni completate!");
+}
+
+// Database oggetti riparabili
+var itemArr = [
+    '0x2D2D','AssassinSpike(left)','blacksmith',
+    '0x2D21','AssassinSpike(right)','blacksmith',
+    '0x0F4A','Axe(left)','blacksmith',
+    '0x0F49','Axe(right)','blacksmith',
+    '0x0F4E','Bardiche(left)','blacksmith',
+    '0x0F4D','Bardiche(right)','blacksmith',
+    '0x0F48','BattleAxe(left)','blacksmith',
+    '0x0F47','BattleAxe(right)','blacksmith',
+    '0x0DF0','BlackStaff(left)','carpenter',
+    '0x0DF1','BlackStaff(right)','carpenter',
+    '0x26BD','BladedStaff(left)','blacksmith',
+    '0x26C7','BladedStaff(right)','blacksmith',
+    '0x27A8','Bokuto(mono)','carpenter',
+    '0x26BB','BoneHarvester(left)','blacksmith',
+    '0x26C5','BoneHarvester(right)','blacksmith',
+    '0x13B1','Bow(left)','fletcher',
+    '0x13B2','Bow(right)','fletcher',
+    '0x0F5F','Broadsword(left)','blacksmith',
+    '0x0F5E','Broadsword(right)','blacksmith',
+    '0x1B72','BronzeShield(mono)','blacksmith',
+    '0x1B73','Buckler(mono)','blacksmith',
+    '0x13F7','ButcherKnife(left)','tinker',
+    '0x13F6','ButcherKnife(right)','tinker',
+    '0x1BC3','ChaosShield(mono)','blacksmith',
+    '0x0EC2','Cleaver(left)','tinker',
+    '0x0EC3','Cleaver(right)','tinker',
+    '0x13B3','Club(left)','carpenter',
+    '0x13B4','Club(right)','carpenter',
+    '0x26C2','CompositeBow(left)','fletcher',
+    '0x26CC','CompositeBow(right)','fletcher',
+    '0x26C1','CrescentBlade(left)','blacksmith',
+    '0x26CB','CrescentBlade(right)','blacksmith',
+    '0x13F4','Crook(left)','carpenter',
+    '0x13F5','Crook(right)','carpenter',
+    '0x0F50','Crossbow(left)','fletcher',
+    '0x0F4F','Crossbow(right)','fletcher',
+    '0x1440','Cutlass(left)','blacksmith',
+    '0x1441','Cutlass(right)','blacksmith',
+    '0x0F52','Dagger(left)','blacksmith',
+    '0x0F51','Dagger(right)','blacksmith',
+    '0x27A9','Daisho(mono)','blacksmith',
+    '0x2D30','DiamondMace(left)','blacksmith',
+    '0x2D24','DiamondMace(right)','blacksmith',
+    '0x0F4C','DoubleAxe(left)','blacksmith',
+    '0x0F4B','DoubleAxe(right)','blacksmith',
+    '0x26BF','DoubleBladedStaff(left)','blacksmith',
+    '0x26C9','DoubleBladedStaff(right)','blacksmith',
+    '0x2D2A','ElvenCompositeLongbow(left)','fletcher',
+    '0x2D1E','ElvenCompositeLongbow(right)','fletcher',
+    '0x2D35','ElvenMachete(left)','blacksmith',
+    '0x2D29','ElvenMachete(right)','blacksmith',
+    '0x2D2C','ElvenSpellblade(left)','blacksmith',
+    '0x2D20','ElvenSpellblade(right)','blacksmith',
+    '0x0F46',"Executioner'sAxe(left)",'blacksmith',
+    '0x0F45',"Executioner'sAxe(right)",'blacksmith',
+    '0x13F9','GnarledStaff(left)','carpenter',
+    '0x13F8','GnarledStaff(right)','carpenter',
+    '0x143E','Halberd(left)','blacksmith',
+    '0x143F','Halberd(right)','blacksmith',
+    '0x143C','HammerPick(left)','blacksmith',
+    '0x143D','HammerPick(right)','blacksmith',
+    '0x0F44','Hatchet(left)','tinker',
+    '0x0F43','Hatchet(right)','tinker',
+    '0x1B77','HeaterShield(left)','blacksmith',
+    '0x1B76','HeaterShield(right)','blacksmith',
+    '0x13FC','HeavyCrossbow(left)','fletcher',
+    '0x13FD','HeavyCrossbow(right)','fletcher',
+    '0x27AD','Kama(mono)','blacksmith',
+    '0x13FE','Katana(left)','blacksmith',
+    '0x13FF','Katana(right)','blacksmith',
+    '0x1400','Kryss(left)','blacksmith',
+    '0x1401','Kryss(right)','blacksmith',
+    '0x27A7','Lajatang(mono)','blacksmith',
+    '0x26C0','Lance(left)','blacksmith',
+    '0x26CA','Lance(right)','blacksmith',
+    '0x13FA','LargeBattleAxe(left)','blacksmith',
+    '0x13FB','LargeBattleAxe(right)','blacksmith',
+    '0x2D2E','Leafblade(left)','blacksmith',
+    '0x2D22','Leafblade(right)','blacksmith',
+    '0x0F60','Longsword(left)','blacksmith',
+    '0x0F61','Longsword(right)','blacksmith',
+    '0x0F5D','Mace(left)','blacksmith',
+    '0x0F5C','Mace(right)','blacksmith',
+    '0x2D2B','MagicalShortbow(left)','fletcher',
+    '0x2D1F','MagicalShortbow(right)','fletcher',
+    '0x143A','Maul(left)','blacksmith',
+    '0x143B','Maul(right)','blacksmith',
+    '0x1B75','MetalKiteShield(left)','blacksmith',
+    '0x1B74','MetalKiteShield(right)','blacksmith',
+    '0x1B7B','MetalShield(mono)','blacksmith',
+    '0x27A2','No-dachi(mono)','blacksmith',
+    '0x27AE','Nunchaku(mono)','tinker',
+    '0x1BC5','OrderShield(left)','blacksmith',
+    '0x1BC4','OrderShield(right)','blacksmith',
+    '0x2D34','OrnateAxe(left)','blacksmith',
+    '0x2D28','OrnateAxe(right)','blacksmith',
+    '0x0E85','Pickaxe(left)','tinker',
+    '0x0E86','Pickaxe(right)','tinker',
+    '0x26BE','Pike(left)','blacksmith',
+    '0x26C8','Pike(right)','blacksmith',
+    '0x0E88','Pitchfork(left)','tinker',
+    '0x0E87','Pitchfork(right)','tinker',
+    '0x0E8A','QuarterStaff(left)','carpenter',
+    '0x0E89','QuarterStaff(right)','carpenter',
+    '0x2D33','RadiantScimitar(left)','blacksmith',
+    '0x2D27','RadiantScimitar(right)','blacksmith',
+    '0x26C3','RepeatingCrossbow(left)','fletcher',
+    '0x26CD','RepeatingCrossbow(right)','fletcher',
+    '0x2D32','RuneBlade(left)','blacksmith',
+    '0x2D26','RuneBlade(right)','blacksmith',
+    '0x27AF','Sai(mono)','blacksmith',
+    '0x26BC','Scepter(left)','blacksmith',
+    '0x26C6','Scepter(right)','blacksmith',
+    '0x13B5','Scimitar(left)','blacksmith',
+    '0x13B6','Scimitar(right)','blacksmith',
+    '0x26BA','Scythe(left)','blacksmith',
+    '0x26C4','Scythe(right)','blacksmith',
+    '0x1402','ShortSpear(left)','blacksmith',
+    '0x1403','ShortSpear(right)','blacksmith',
+    '0x0EC5','SkinningKnife(left)','tinker',
+    '0x0EC4','SkinningKnife(right)','tinker',
+    '0x0FB4','SledgeHammer(left)','tinker',
+    '0x0FB5','SledgeHammer(right)','tinker',
+    '0x13E3',"Smith'sHammer(left)",'tinker',
+    '0x13E4',"Smith'sHammer(right)",'tinker',
+    '0x0F63','Spear(left)','blacksmith',
+    '0x0F62','Spear(right)','blacksmith',
+    '0x1B79','TearKiteShield(left)','blacksmith',
+    '0x1B78','TearKiteShield(right)','blacksmith',
+    '0x27AB','Tekagi(mono)','blacksmith',
+    '0x27A3','Tessen(mono)','blacksmith',
+    '0x27A6','Tetsubo(mono)','carpenter',
+    '0x1442','TwoHandedAxe(left)','blacksmith',
+    '0x1443','TwoHandedAxe(right)','blacksmith',
+    '0x13BA','VikingSword(left)','blacksmith',
+    '0x13B9','VikingSword(right)','blacksmith',
+    '0x27A4','Wakizashi(mono)','blacksmith',
+    '0x13AF','WarAxe(left)','blacksmith',
+    '0x13B0','WarAxe(right)','blacksmith',
+    '0x2D2F','WarCleaver(left)','blacksmith',
+    '0x2D23','WarCleaver(right)','blacksmith',
+    '0x1404','WarFork(left)','blacksmith',
+    '0x1405','WarFork(right)','blacksmith',
+    '0x1438','WarHammer(left)','blacksmith',
+    '0x1439','WarHammer(right)','blacksmith',
+    '0x1406','WarMace(left)','blacksmith',
+    '0x1407','WarMace(right)','blacksmith',
+    '0x2D31','WildStaff(left)','carpenter',
+    '0x2D25','WildStaff(right)','carpenter',
+    '0x1B7A','WoodenShield(mono)','carpenter',
+    '0x1087','GoldEarrings','tinker',
+    '0x153F','Bandana(mono)','tailor',
+    '0x140D','Bascinet(left)','blacksmith',
+    '0x140C','Bascinet(right)','blacksmith',
+    '0x1454','BoneArmor(left)','tailor',
+    '0x144F','BoneArmor(right)','tailor',
+    '0x144E','BoneArms(left)','tailor',
+    '0x1453','BoneArms(right)','tailor',
+    '0x1450','BoneGloves(left)','tailor',
+    '0x1455','BoneGloves(right)','tailor',
+    '0x1451','BoneHelmet(left)','tailor',
+    '0x1456','BoneHelmet(right)','tailor',
+    '0x1457','BoneLeggings(left)','tailor',
+    '0x1452','BoneLeggings(right)','tailor',
+    '0x1F06','Bracelet(mono)','tinker',
+    '0x1086','Bracelet(mono)','tinker',
+    '0x13BB','ChainmailCoif(left)','blacksmith',
+    '0x13C0','ChainmailCoif(right)','blacksmith',
+    '0x2774','ChainmailHatsuburi(mono)','blacksmith',
+    '0x13C3','ChainmailLeggings(mono)','blacksmith',
+    '0x13C4','ChainmailTunic(mono)','blacksmith',
+    '0x1409','CloseHelm(left)','blacksmith',
+    '0x1408','CloseHelmet(right)','blacksmith',
+    '0x2778','DecorativePlatemailKabuto(mono)','blacksmith',
+    '0x1547','DeerMask(mono)','tailor',
+    '0x171A','FeatheredHat(mono)','tailor',
+    '0x1C07','FemaleLeatherArmor(left)','tailor',
+    '0x1C06','FemaleLeatherArmor(right)','tailor',
+    '0x1C05','FemalePlate(left)','blacksmith',
+    '0x1C04','FemalePlate(right)','blacksmith',
+    '0x1713','FloppyHat(mono)','tailor',
+    '0x2777','HeavyPlatemailJingasa(mono)','blacksmith',
+    '0x140B','Helmet(left)','blacksmith',
+    '0x140A','Helmet(right)','blacksmith',
+    '0x2B75','HideGloves(mono)','tailor',
+    '0x2B76','HideGorget(mono)','tailor',
+    '0x2B78','HidePants(mono)','tailor',
+    '0x2B77','HidePauldrons(mono)','tailor',
+    '0x2B74','HideTunic(mono)','tailor',
+    '0x171C','JesterHat(mono)','tailor',
+    '0x2798','Kasa(mono)','tailor',
+    '0x2FC8','LeafArms(mono)','tailor',
+    '0x2FC6','LeafGloves(mono)','tailor',
+    '0x2FC7','LeafGorget(mono)','tailor',
+    '0x2FC9','LeafLeggings(mono)','tailor',
+    '0x2FCA','LeafTonlet(mono)','tailor',
+    '0x2FC5','LeafTunic(mono)','tailor',
+    '0x1C0B','LeatherBustier(left)','tailor',
+    '0x1C0A','LeatherBustier(right)','tailor',
+    '0x1DB9','LeatherCap(left)','tailor',
+    '0x1DBA','LeatherCap(right)','tailor',
+    '0x277B','LeatherDo(mono)','tailor',
+    '0x13C6','LeatherGloves(left)','tailor',
+    '0x13CE','LeatherGloves(right)','tailor',
+    '0x13C7','LeatherGorget(mono)','tailor',
+    '0x278A','LeatherHaidate(mono)','tailor',
+    '0x277E','LeatherHiroSode(mono)','tailor',
+    //'0xA1C7','LeatherJingasa(mono)','tinker',
+    '0x13D2','LeatherLeggings(left)','tailor',
+    '0x13CB','LeatherLeggings(right)','tailor',
+    '0x277A','LeatherMempo(mono)','tailor',
+    '0x278E','LeatherNinjaHood(mono)','tailor',
+    '0x2793','LeatherNinjaJacket(mono)','tailor',
+    '0x2792','LeatherNinjaMitts(mono)','tailor',
+    '0x2791','LeatherNinjaPants(mono)','tailor',
+    '0x1C01','LeatherShorts(left)','tailor',
+    '0x1C00','LeatherShorts(right)','tailor',
+    '0x1C09','LeatherSkirt(left)','tailor',
+    '0x1C08','LeatherSkirt(right)','tailor',
+    '0x13C5','LeatherSleeves(left)','tailor',
+    '0x13CD','LeatherSleeves(right)','tailor',
+    '0x2786','LeatherSuneate(mono)','tailor',
+    '0x13D3','LeatherTunic(left)','tailor',
+    '0x13CC','LeatherTunic(right)','tailor',
+    '0x2781','LightPlatemailJingasa(mono)','blacksmith',
+    '0x140F','NorseHelm(left)','blacksmith',
+    '0x140E','NorseHelm(right)','blacksmith',
+    '0x1F0B','OrcHelm(left)','tailor',
+    '0x1F0C','OrcHelm(right)','tailor',
+    '0x141B','OrcMask(mono)','tailor',
+    '0x1412','PlateHelm(left)','blacksmith',
+    '0x1419','PlateHelm(right)','blacksmith',
+    '0x1410','PlatemailArms(left)','blacksmith',
+    '0x1417','PlatemailArms(right)','blacksmith',
+    '0x2785','PlatemailBattleKabuto(mono)','blacksmith',
+    '0x277D','PlatemailDo(mono)','blacksmith',
+    '0x1414','PlatemailGloves(left)','blacksmith',
+    '0x1418','PlatemailGloves(right)','blacksmith',
+    '0x1413','PlatemailGorget(mono)','blacksmith',
+    '0x278D','PlatemailHaidate(mono)','blacksmith',
+    '0x2775','PlatemailHatsuburi(mono)','blacksmith',
+    '0x2780','PlatemailHiroSode(mono)','blacksmith',
+    '0x141A','PlatemailLegs(left)','blacksmith',
+    '0x1411','PlatemailLegs(right)','blacksmith',
+    '0x2779','PlatemailMempo(mono)','blacksmith',
+    '0x2788','PlatemailSuneate(mono)','blacksmith',
+    '0x1416','PlatemailTunic(left)','blacksmith',
+    '0x1415','PlatemailTunic(right)','blacksmith',
+    '0x2B71','RavenHelm(mono)','carpenter',
+    '0x1F09','Ring(mono)','tinker',
+    '0x108A','Ring(mono)','tinker',
+    '0x13EB','RingmailGloves(left)','blacksmith',
+    '0x13F2','RingmailGloves(right)','blacksmith',
+    '0x13F1','RingmailLeggings(left)','blacksmith',
+    '0x13F0','RingmailLeggings(right)','blacksmith',
+    '0x13EF','RingmailSleeves(left)','blacksmith',
+    '0x13EE','RingmailSleeves(right)','blacksmith',
+    '0x13ED','RingmailTunic(left)','blacksmith',
+    '0x13EC','RingmailTunic(right)','blacksmith',
+    '0x1543','Skullcap(mono)','tailor',
+    '0x2784','SmallPlatemailJingasa(mono)','blacksmith',
+    '0x13BE','StandardPlatemailKabuto(mono)','blacksmith',
+    '0x1717','StrawHat(mono)','tailor',
+    '0x1C03','StuddedArmor(mono)','tailor',
+    '0x1C0D','StuddedBustier(left)','tailor',
+    '0x230A','StuddedBustier(right)','tailor',
+    '0x277C','StuddedDo(mono)','tailor',
+    '0x13D5','StuddedGloves(left)','tailor',
+    '0x13DD','StuddedGloves(right)','tailor',
+    '0x13D6','StuddedGorget(mono)','tailor',
+    '0x278B','StuddedHaidate(mono)','tailor',
+    '0x277F','StuddedHiroSode(mono)','tailor',
+    '0x13E1','StuddedLeggings(left)','tailor',
+    '0x13DA','StuddedLeggings(right)','tailor',
+    '0x279D','StuddedMempo(mono)','tailor',
+    '0x13D4','StuddedSleeves(left)','tailor',
+    '0x13DC','StuddedSleeves(right)','tailor',
+    '0x2787','StuddedSuneate(mono)','tailor',
+    '0x13E2','StuddedTunic(left)','tailor',
+    '0x13DB','StuddedTunic(right)','tailor',
+    '0x1716','TallStrawHat(mono)','tailor',
+    '0x1549','TribalMaskA(mono)','tailor',
+    '0x154B','TribalMaskB(mono)','tailor',
+    '0x171B','TricorneHat(mono)','tailor',
+    '0x2B72','VultureHelm(mono)','carpenter',
+    '0x1714','Wide-brimHat(mono)','tailor',
+    '0x2B73','WingedHelm(mono)','carpenter',
+    '0x1718',"Wizard'sHat(mono)",'tinker',
+    '0x2B6C','WoodlandArms(mono)','carpenter',
+    '0x2B67','WoodlandChest(mono)','carpenter',
+    '0x2B6A','WoodlandGauntlets(mono)','carpenter',
+    '0x2B69','WoodlandGorget(mono)','carpenter',
+    '0x2B6B','WoodlandLeggings(mono)','carpenter',
+    '0x153B','Apron','tailor',
+    '0x13D4','HornedStuddedSleeves','tailor',
+    '0x1545','MaceAndShield','tinker',
+    '0x3BB5','CorsairMedallion','blacksmith',
+    '0x1541','sash','tailor',
+    '0x2643','GlovesOfFeudalGrip','blacksmith',
+    '0x3BB5','CorsairsMedallion','tailor',
+    '0xA1C7','BloodyMask','tailor',
+    //'0xAECC','fire plate Arms','tailor',
+    '0xAECE','BarbedBalronBoneArmor','blacksmith',
+    '0xA429','CorsairsMedallion','tailor',
+    '0x170B','Bogling Hide Mukuluks','tailor',
+    '0xAEAE','Arms plate brit blue','tailor',
+    '0xAEB0','Chest plate brit blue','tailor',
+    '0xAEAD','Gorget plate brit blue','tailor',
+    '0xAEB1','Legs plate brit blue','blacksmith',
+    '0xAEAC','Legs plate brit blue','tinker',
+    '0xAEAF','Gloves plate brit blue','blacksmith',
+    '0xA410','Corsair helm','tinker'
+];
+
+function UpsertRepairItem(graphic, name, tool) {
+    graphic = NormalizeRepairGraphicLocal(graphic);
+    var g = graphic.toLowerCase();
+
+    for (var i = itemArr.length - 3; i >= 0; i -= 3) {
+        if (String(itemArr[i]).toLowerCase() === g) {
+            itemArr[i] = graphic;
+            itemArr[i + 1] = name;
+            itemArr[i + 2] = tool;
+            return;
+        }
+    }
+
+    itemArr.push(graphic, name, tool);
+}
+
+function MergeRuntimeRepairOverrides() {
+    var data = Shared.GetVar('repairbench_runtime_overrides');
+
+    if (!data) {
+        return;
+    }
+
+    var rows = String(data).split('\n');
+
+    for (var i = 0; i < rows.length; i++) {
+        if (!rows[i]) {
+            continue;
+        }
+
+        var parts = rows[i].split('§');
+
+        if (parts.length < 3) {
+            continue;
+        }
+
+        UpsertRepairItem(parts[0], parts[1], parts[2]);
+    }
+}
+
+function NormalizeRepairGraphicLocal(graphic) {
+    var g = String(graphic);
+
+    if (g.indexOf('0x') !== 0 && g.indexOf('0X') !== 0) {
+        g = '0x' + g;
+    }
+
+    return g.toUpperCase().replace('0X', '0x');
+}
+
+// =====================================================
+// REPAIR BENCH - CUSTOM ITEMS SYSTEM
+// =====================================================
+
+var customRepairArr = [
+    '0x1B76','Heater Shield Of The Umbrascale','blacksmith'
+];
+
+//var customRepairMerged = false;
+
+function MergeCustomRepairArr() {
+    if (!customRepairArr || !customRepairArr.length) {
+        return;
+    }
+
+    for (var i = 0; i < customRepairArr.length; i += 3) {
+        var graphic = String(customRepairArr[i]).toLowerCase();
+        var name = customRepairArr[i + 1];
+        var tool = customRepairArr[i + 2];
+
+        var found = false;
+
+        for (var j = itemArr.length - 3; j >= 0; j -= 3) {
+            if (String(itemArr[j]).toLowerCase() === graphic) {
+                itemArr[j] = customRepairArr[i];
+                itemArr[j + 1] = name;
+                itemArr[j + 2] = tool;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            itemArr.push(customRepairArr[i], name, tool);
+        }
+    }
+}
+
+// Added by Compagnone Repair Bench
+if (typeof customRepairArr === 'undefined') var customRepairArr = [];
+customRepairArr.push('0xAECC','Animated Platemail Arms Of Sorcery','blacksmith');
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === 'undefined') var customRepairArr = [];
+customRepairArr.push('0xAECC','Animated Platemail Arms Of Sorcery','blacksmith');
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === 'undefined') var customRepairArr = [];
+customRepairArr.push('0xAECC','Animated Platemail Arms Of Sorcery','blacksmith');
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === 'undefined') var customRepairArr = [];
+customRepairArr.push('0xAECC','Animated Platemail Arms Of Sorcery','tailor');
+
+// Added by Compagnone Repair Bench
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xB2C7","Wyrmscale Helm","tinker");
+
+
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xAECE","Barbed Platemail Tunic","tailor");
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xAECE","Barbed Platemail Tunic","tailor");
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xAECE","Barbed Platemail Tunic","tailor");
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xAECE","Barbed Platemail Tunic","tailor");
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xAECE","Barbed Platemail Tunic","tailor");
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xAECE","Barbed Platemail Tunic","tailor");
+
+// Added by Compagnone Repair Bench - OVERRIDE GRAPHIC ESISTENTE
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0x1545","Helm Of Fortitude","tailor");
+
+// Added by Compagnone Repair Bench
+if (typeof customRepairArr === "undefined") var customRepairArr = [];
+customRepairArr.push("0xAECD","Horned Platemail Gloves","tailor");

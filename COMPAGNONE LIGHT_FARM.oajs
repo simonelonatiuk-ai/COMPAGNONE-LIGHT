@@ -1,0 +1,2977 @@
+
+// =====================================================
+// CONFIG GENERALE
+// =====================================================
+
+var bonesGraphic = '0x0F80';
+var FUNGI_GRAPHIC = '0x26B7';
+
+var FARM_RUNEBOOK_GUMP_ID = '0x554B87F3';
+
+var FARM_RUNE_BANK_HOOK    = 7;   // runa 1 banca
+var FARM_RUNE_WITCH_HOOK   = 13;  // runa 2 strega doom
+var FARM_RUNE_CAMPANA_HOOK = 43;  // runa 7 campana
+
+var FARM_RUNEBOOK_OSSA_CAMPANA_VAR = 'farm_runebook_ossa_campana';
+var FARM_RUNEBOOK_OSSA_DOOM_VAR    = 'farm_runebook_ossa_doom';
+var SKULL_RUNEBOOK_VAR             = 'farm_runebook_skull_doom';
+var FUNGI_RUNEBOOK_VAR             = 'farm_runebook_funghi';
+
+var bellSerial = '0x40144403';
+var bellPos = { x: 417, y: 246, z: 23 };
+var bellUseRange = 1;
+var msgAlreadySummoned = 'The ferry man has already been summoned. There is no need to ring for him again.';
+var lastClickTime = 0;
+
+
+// =====================================================
+// CONFIG PESO FARM
+// =====================================================
+
+var FARM_SAFE_WEIGHT_PERCENT = 0.85;
+var FARM_MIN_FREE_WEIGHT_AFTER_RECALL = 1;
+
+
+// =====================================================
+// HELPERS PESO
+// =====================================================
+
+function FarmRefreshWeight() {
+    try {
+        Orion.GetStatus(Player.Serial());
+    } catch (e) {}
+
+    Orion.Wait(50);
+}
+
+function FarmSafeMaxWeight() {
+    FarmRefreshWeight();
+    return Math.floor(Player.MaxWeight() * FARM_SAFE_WEIGHT_PERCENT);
+}
+
+function FarmCurrentWeight() {
+    FarmRefreshWeight();
+    return Player.Weight();
+}
+
+function FarmFreeSafeWeight() {
+    var free = FarmSafeMaxWeight() - FarmCurrentWeight();
+
+    if (free < 0) free = 0;
+
+    return Math.floor(free);
+}
+
+function FarmIsWeightAtLimit() {
+    FarmRefreshWeight();
+    return Player.Weight() >= FarmSafeMaxWeight();
+}
+
+function FarmWeightStatusText() {
+    FarmRefreshWeight();
+    return Player.Weight() + '/' + Player.MaxWeight() + ' safe=' + FarmSafeMaxWeight() + ' freeSafe=' + FarmFreeSafeWeight();
+}
+
+function FarmGetCarryableBonesAmount(wantedAmount) {
+    var free = FarmFreeSafeWeight() - FARM_MIN_FREE_WEIGHT_AFTER_RECALL;
+
+    if (free < 0) free = 0;
+    if (wantedAmount < free) return wantedAmount;
+
+    return free;
+}
+
+
+// =====================================================
+// HELPERS COMUNI FARM
+// =====================================================
+
+function FarmShouldStop() {
+    return Player.Dead() || Orion.GetGlobal('StopAllScripts') === 'true';
+}
+
+function FarmHandleBloodOath() {
+    if (typeof IsBloodOathLocked === 'function' && IsBloodOathLocked()) {
+        HandleBloodOath();
+        Orion.Wait(80);
+        return true;
+    }
+
+    return false;
+}
+
+function FarmCleanState(wait) {
+    Orion.WarMode(false);
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+
+    var g = Orion.GetGump('last');
+
+    if (g !== null) {
+        try {
+            g.Close();
+        } catch (e) {}
+    }
+
+    Orion.Wait(wait || 150);
+}
+
+function FarmRetryUntilDone(actionFn, label, waitMs) {
+    waitMs = waitMs || 1200;
+
+    while (!FarmShouldStop()) {
+        FarmCleanState(125);
+        Orion.Print(65, '[FARM] ' + label);
+
+        var ok = false;
+
+        try {
+            ok = actionFn();
+        } catch (e) {
+            Orion.Print(33, '[FARM ERRORE] ' + label + ': ' + e);
+            ok = false;
+        }
+
+        if (ok) {
+            Orion.Print(65, '[FARM OK] ' + label);
+            return true;
+        }
+
+        Orion.CharPrint(Player.Serial(), 33, label + ' fallito. Riprovo stesso step.');
+        Orion.Wait(waitMs);
+    }
+
+    return false;
+}
+
+function FarmRecallRune(varName, hookId, label) {
+    var book = Orion.FindObject(varName);
+
+    if (!book) {
+        Orion.CharPrint(Player.Serial(), 33, 'Runebook non selezionato: ' + label);
+        return false;
+    }
+
+    var attempt = 0;
+
+    while (!FarmShouldStop()) {
+        attempt++;
+
+        FarmCleanState(150);
+        Orion.Print(65, 'Recall -> ' + label + ' tentativo ' + attempt);
+        Orion.UseObject(book.Serial());
+
+        var timeout = Orion.Now() + 3500;
+
+        while (Orion.Now() < timeout) {
+            if (FarmShouldStop()) return false;
+
+            if (Orion.WaitForGump(400)) {
+                var gump = Orion.GetGump('last');
+
+                if (gump !== null && !gump.Replayed() && gump.ID() === FARM_RUNEBOOK_GUMP_ID) {
+                    gump.Select(Orion.CreateGumpHook(hookId));
+                    Orion.Wait(1800);
+                    FarmCleanState(100);
+                    Orion.Print(65, 'Recall comando inviato: ' + label);
+                    return true;
+                }
+
+                if (gump !== null) {
+                    try {
+                        gump.Close();
+                    } catch (e) {}
+                }
+            }
+
+            Orion.Wait(80);
+        }
+
+        Orion.Print(33, 'Gump runebook non trovato: ' + label + '. Riprovo.');
+        Orion.Wait(700);
+    }
+
+    return false;
+}
+
+function FarmRecallBank(varName) {
+    return FarmRecallRune(varName, FARM_RUNE_BANK_HOOK, 'BANCA');
+}
+
+function FarmOpenBankAndGetContainer() {
+    FarmCleanState(150);
+
+    for (var attempt = 1; attempt <= 8; attempt++) {
+        Orion.Say('bank');
+        Orion.Wait(800);
+
+        var bankItems = Orion.FindType('any', 'any', 'bank', 'item|recurse');
+        var lastItems = Orion.FindType('any', 'any', 'lastcontainer', 'item|recurse');
+
+        var cont = FarmGetContainerFromFirstItem(bankItems);
+        if (cont) return cont;
+
+        cont = FarmGetContainerFromFirstItem(lastItems);
+        if (cont) return cont;
+
+        Orion.Print(33, 'Banca non pronta, ritento ' + attempt + '/8');
+        Orion.Wait(500);
+    }
+
+    return null;
+}
+
+function FarmGetContainerFromFirstItem(items) {
+    if (!items || items.length <= 0) return null;
+
+    var first = Orion.FindObject(items[0]);
+    if (!first) return null;
+
+    var cont = first.Container();
+
+    if (cont && cont !== '0xFFFFFFFF') {
+        Orion.Print(65, 'Bank container trovato: ' + cont);
+        return cont;
+    }
+
+    return null;
+}
+
+function FarmDepositGraphicToBank(runebookVar, graphic, label) {
+    return FarmRetryUntilDone(function() {
+        if (!FarmRecallBank(runebookVar)) {
+            Orion.CharPrint(Player.Serial(), 33, 'Recall banca fallito per deposito ' + label);
+            return false;
+        }
+
+        var bankContainer = FarmOpenBankAndGetContainer();
+
+        if (!bankContainer) {
+            Orion.CharPrint(Player.Serial(), 33, 'Bank container non trovato per ' + label);
+            return false;
+        }
+
+        var items = Orion.FindType(graphic, 'any', 'backpack', 'item|recurse');
+
+        if (!items || items.length <= 0) {
+            Orion.Print(65, 'Nessun item da depositare: ' + label);
+            return true;
+        }
+
+        for (var i = 0; i < items.length; i++) {
+            if (FarmShouldStop()) return false;
+
+            var obj = Orion.FindObject(items[i]);
+            if (!obj) continue;
+
+            Orion.Print(65, 'Deposito ' + label + ': ' + obj.Serial());
+            Orion.MoveItem(obj.Serial(), 0, bankContainer);
+            Orion.Wait(700);
+        }
+
+        Orion.Wait(700);
+
+        var remaining = Orion.FindType(graphic, 'any', 'backpack', 'item|recurse');
+
+        if (remaining && remaining.length > 0) {
+            Orion.CharPrint(Player.Serial(), 33, label + ' ancora nello zaino dopo deposito. Riprovo deposito.');
+            return false;
+        }
+
+        Orion.CharPrint(Player.Serial(), 65, label + ' depositate in banca.');
+        return true;
+
+    }, 'Deposito ' + label + ' in banca');
+}
+
+function FarmCountGraphicInBackpack(graphic) {
+    var total = 0;
+    var items = Orion.FindType(graphic, 'any', 'backpack', 'item|recurse');
+
+    if (!items || items.length <= 0) return 0;
+
+    for (var i = 0; i < items.length; i++) {
+        var obj = Orion.FindObject(items[i]);
+        if (!obj) continue;
+
+        var amount = 0;
+
+        try {
+            if (typeof obj.Amount === 'function') {
+                amount = Number(obj.Amount());
+            }
+        } catch (e1) {}
+
+        try {
+            if ((!amount || amount <= 0) && typeof obj.Amount !== 'undefined') {
+                amount = Number(obj.Amount);
+            }
+        } catch (e2) {}
+
+        try {
+            if ((!amount || amount <= 0) && typeof obj.Count === 'function') {
+                amount = Number(obj.Count());
+            }
+        } catch (e3) {}
+
+        try {
+            if ((!amount || amount <= 0) && typeof obj.Count !== 'undefined') {
+                amount = Number(obj.Count);
+            }
+        } catch (e4) {}
+
+        try {
+            if ((!amount || amount <= 0) && typeof obj.Properties === 'function') {
+                var props = obj.Properties();
+                var match = String(props).match(/Amount:\s*(\d+)/i);
+
+                if (match && match.length > 1) {
+                    amount = Number(match[1]);
+                }
+            }
+        } catch (e5) {}
+
+        if (!amount || amount <= 0 || isNaN(amount)) amount = 1;
+
+        total += amount;
+    }
+
+    return total;
+}
+
+function FarmStartProfile(name) {
+    Orion.SetGlobal('StopAllScripts', 'false');
+
+    if (typeof StartProfile === 'function') {
+        StartProfile(name, null, null, false, false);
+    } else {
+        if (!Orion.ScriptRunning('CheckCurseAndPoison')) Orion.Exec('CheckCurseAndPoison', 'true');
+        if (!Orion.ScriptRunning('CheckAndDispelRevenant')) Orion.Exec('CheckAndDispelRevenant', 'true');
+        if (!Orion.ScriptRunning('AutoBushidoAbilities')) Orion.Exec('AutoBushidoAbilities', 'true');
+        if (!Orion.ScriptRunning('AutoMount')) Orion.Exec('AutoMount', 'true');
+        if (!Orion.ScriptRunning('Durability_Watcher')) Orion.Exec('Durability_Watcher', 'true');
+        if (!Orion.ScriptRunning('SuperInsura')) Orion.Exec('SuperInsura', 'true');
+        if (!Orion.ScriptRunning('AutoConsecrate')) Orion.Exec('AutoConsecrate', 'true');
+        if (!Orion.ScriptRunning('AutoCurseWeapon')) Orion.Exec('AutoCurseWeapon', 'true');
+        if (!Orion.ScriptRunning('AutoDivine')) Orion.Exec('AutoDivine', 'true');
+        if (!Orion.ScriptRunning('AutoLogoutOnDeath')) Orion.Exec('AutoLogoutOnDeath', 'true');
+        if (!Orion.ScriptRunning('UseSpecialAbilities')) Orion.Exec('UseSpecialAbilities', 'true');
+    }
+}
+
+function EnsureSbloccaSeFermoRunning() {
+    if (!Orion.ScriptRunning('SbloccaSeFermo')) {
+        Orion.Exec('SbloccaSeFermo', 'true');
+        Orion.Print(65, 'SbloccaSeFermo avviato.');
+    }
+}
+
+
+// =====================================================
+// FARM LOCATION SAFETY / BANK / DOOM DETECTION
+// =====================================================
+
+var FARM_BANK_NPC_RANGE = 24;
+var FARM_DOOM_NPC_RANGE = 35;
+var FARM_NO_ENEMY_BANK_CHECK_MS = 5000;
+
+var FARM_KNOWN_BANK_NPCS = [
+    '0x00008A59' // Arcadia The Innkeeper
+];
+
+function FarmNormalizeSerial(serial) {
+    var s = String(serial).toLowerCase();
+
+    if (s.indexOf('0x') !== 0) {
+        s = '0x' + s;
+    }
+
+    return s;
+}
+
+function FarmSerialMatches(a, b) {
+    return FarmNormalizeSerial(a) === FarmNormalizeSerial(b);
+}
+
+function FarmFindKnownBankNpc() {
+    for (var i = 0; i < FARM_KNOWN_BANK_NPCS.length; i++) {
+        var serial = FARM_KNOWN_BANK_NPCS[i];
+        var npc = Orion.FindObject(serial);
+
+        if (npc && Orion.ObjectExists(serial)) {
+            try {
+                if (npc.Distance() <= FARM_BANK_NPC_RANGE) {
+                    return npc;
+                }
+            } catch (e) {
+                return npc;
+            }
+        }
+    }
+
+    return null;
+}
+
+function FarmFindBankNpcByName(range) {
+    range = range || FARM_BANK_NPC_RANGE;
+
+    var npcs = Orion.FindTypeEx(
+        'any',
+        'any',
+        'ground',
+        'mobile|live|near|inlos',
+        range,
+        'any'
+    );
+
+    if (!npcs || npcs.length <= 0) return null;
+
+    for (var i = 0; i < npcs.length; i++) {
+        var npc = npcs[i];
+        if (!npc) continue;
+
+        var serial = npc.Serial ? npc.Serial() : '';
+
+        for (var k = 0; k < FARM_KNOWN_BANK_NPCS.length; k++) {
+            if (FarmSerialMatches(serial, FARM_KNOWN_BANK_NPCS[k])) {
+                return npc;
+            }
+        }
+
+        var name = '';
+        var props = '';
+
+        try {
+            name = npc.Name ? (npc.Name() || '').toLowerCase() : '';
+        } catch (e1) {}
+
+        try {
+            props = npc.Properties ? (npc.Properties() || '').toLowerCase() : '';
+        } catch (e2) {}
+
+        var text = name + ' ' + props;
+
+        if (
+            text.indexOf('arcadia') !== -1 ||
+            text.indexOf('innkeeper') !== -1 ||
+            text.indexOf('inkeeper') !== -1 ||
+            text.indexOf('banker') !== -1 ||
+            text.indexOf('minter') !== -1 ||
+            text.indexOf('banchiere') !== -1
+        ) {
+            return npc;
+        }
+    }
+
+    return null;
+}
+
+function FarmFindBankNpc(range) {
+    var known = FarmFindKnownBankNpc();
+
+    if (known) {
+        return known;
+    }
+
+    return FarmFindBankNpcByName(range || FARM_BANK_NPC_RANGE);
+}
+
+function FarmIsInBankArea() {
+    var npc = FarmFindBankNpc(FARM_BANK_NPC_RANGE);
+
+    if (npc) {
+        var name = '';
+
+        try {
+            name = npc.Name ? npc.Name() : '';
+        } catch (e) {}
+
+        Orion.Print(33, '[FARM SAFETY] BANCA rilevata: ' + name + ' ' + npc.Serial());
+        return true;
+    }
+
+    return false;
+}
+
+function FarmFindDoomWitch() {
+    var fixed = Orion.FindObject('0x00001AA8');
+
+    if (fixed && Orion.ObjectExists('0x00001AA8')) {
+        try {
+            if (fixed.Distance() <= FARM_DOOM_NPC_RANGE) {
+                return fixed;
+            }
+        } catch (e0) {
+            return fixed;
+        }
+    }
+
+    var npcs = Orion.FindTypeEx(
+        '0x0190|0x0191',
+        'any',
+        'ground',
+        'mobile|live|near|inlos',
+        FARM_DOOM_NPC_RANGE,
+        'any'
+    );
+
+    if (!npcs || npcs.length <= 0) return null;
+
+    for (var i = 0; i < npcs.length; i++) {
+        var npc = npcs[i];
+        if (!npc) continue;
+
+        var name = '';
+        var props = '';
+
+        try {
+            name = npc.Name ? (npc.Name() || '').toLowerCase() : '';
+        } catch (e1) {}
+
+        try {
+            props = npc.Properties ? (npc.Properties() || '').toLowerCase() : '';
+        } catch (e2) {}
+
+        var text = name + ' ' + props;
+
+        if (
+            text.indexOf('victoria') !== -1 ||
+            text.indexOf('sorceress') !== -1 ||
+            text.indexOf('the sorceress') !== -1
+        ) {
+            return npc;
+        }
+    }
+
+    return null;
+}
+
+function FarmIsInDoomArea() {
+    var witch = FarmFindDoomWitch();
+
+    if (witch) {
+        var name = '';
+
+        try {
+            name = witch.Name ? witch.Name() : '';
+        } catch (e) {}
+
+        Orion.Print(65, '[FARM SAFETY] DOOM rilevato: ' + name + ' ' + witch.Serial());
+        return true;
+    }
+
+    return false;
+}
+
+function FarmRecallOutOfBank(runebookVar, hookId, label) {
+    return FarmRetryUntilDone(function() {
+        FarmCleanState(150);
+
+        if (!FarmRecallRune(runebookVar, hookId, label)) {
+            return false;
+        }
+
+        Orion.Wait(1800);
+
+        if (label === 'STREGA DOOM') {
+            if (FarmIsInDoomArea()) {
+                Orion.Print(65, '[FARM SAFETY] Arrivato correttamente a Doom/Strega.');
+                return true;
+            }
+
+            if (FarmIsInBankArea()) {
+                Orion.CharPrint(Player.Serial(), 33, 'Recall fallito: sono ancora in banca. Riprovo Strega Doom.');
+                return false;
+            }
+
+            Orion.CharPrint(Player.Serial(), 33, 'Non vedo Victoria/Strega Doom. Riprovo recall Doom.');
+            return false;
+        }
+
+        if (label === 'CAMPANA') {
+            if (!FarmIsInBankArea() && Orion.GetDistance(bellPos.x, bellPos.y) <= 25) {
+                Orion.Print(65, '[FARM SAFETY] Arrivato correttamente alla Campana.');
+                return true;
+            }
+
+            if (FarmIsInBankArea()) {
+                Orion.CharPrint(Player.Serial(), 33, 'Recall fallito: sono ancora in banca. Riprovo Campana.');
+                return false;
+            }
+
+            Orion.CharPrint(Player.Serial(), 33, 'Non sono vicino alla Campana. Riprovo recall Campana.');
+            return false;
+        }
+
+        if (FarmIsInBankArea()) {
+            Orion.CharPrint(Player.Serial(), 33, 'Sono ancora in banca dopo recall ' + label + '. Riprovo.');
+            return false;
+        }
+
+        return true;
+
+    }, 'Recall sicuro fuori banca -> ' + label, 900);
+}
+
+function FarmFindAnyEnemyNear(range) {
+    range = range || 12;
+
+    var enemies = Orion.FindTypeEx(
+        'any',
+        'any',
+        'ground',
+        'mobile|live|near|inlos|ignoreself|ignorefriends',
+        range,
+        targetNoto
+    );
+
+    if (!enemies || enemies.length <= 0) return null;
+
+    for (var i = 0; i < enemies.length; i++) {
+        var mob = enemies[i];
+        if (!mob) continue;
+
+        if (typeof IsIgnoredSummon === 'function' && IsIgnoredSummon(mob)) {
+            Orion.Ignore(mob.Serial());
+            continue;
+        }
+
+        return mob;
+    }
+
+    return null;
+}
+
+
+// =====================================================
+// SET RUNEBOOK DA GUI
+// =====================================================
+
+function SelectOrResetFarmRunebook(varName, label) {
+    if (Orion.FindObject(varName)) {
+        Orion.RemoveObject(varName);
+        Shared.RemoveVar(varName + '_name');
+        Orion.CharPrint(Player.Serial(), 33, label + ' resettato!');
+        return;
+    }
+
+    Orion.CharPrint(Player.Serial(), 55, 'Seleziona ' + label);
+
+    if (Orion.WaitForAddObject(varName, 15000)) {
+        var book = Orion.FindObject(varName);
+
+        if (book) {
+            Shared.AddVar(varName + '_name', book.Name());
+            Orion.CharPrint(Player.Serial(), 65, label + ' salvato: ' + book.Name());
+        }
+    } else {
+        Orion.CharPrint(Player.Serial(), 33, 'Tempo scaduto: nessun runebook selezionato.');
+    }
+}
+
+function GetFarmRunebookName(varName) {
+    var book = Orion.FindObject(varName);
+
+    if (book) {
+        var name = book.Name();
+
+        if (name && name.length > 0) {
+            Shared.AddVar(varName + '_name', name);
+            return name;
+        }
+
+        return '[caricamento...]';
+    }
+
+    var savedName = Shared.GetVar(varName + '_name');
+    return savedName ? savedName : 'non selezionato';
+}
+
+
+// =====================================================
+// FARM OSSA DOOM
+// =====================================================
+
+var doomBoneRail = [
+    [438,205], [484,199], [479,139], [479,114], [481,70],  [467,28],
+    [441,28],  [420,36],  [392,36],  [358,39],  [299,16],  [275,27],
+    [356,40],  [332,83],  [284,93],  [317,101], [318,126], [314,154],
+    [291,154], [272,171], [292,178], [312,180], [337,178], [273,211],
+    [272,233], [296,237], [324,237], [353,237], [386,237], [427,205]
+];
+
+function StartBoneScavenger() {
+    Orion.Print(65, '--- FARM OSSA DOOM AVVIATO ---');
+
+    if (!Orion.FindObject(FARM_RUNEBOOK_OSSA_DOOM_VAR)) {
+        Orion.CharPrint(Player.Serial(), 33, 'Runebook Ossa Doom non selezionato!');
+        return;
+    }
+
+    FarmStartProfile('BoneScavenger');
+    EnsureSbloccaSeFermoRunning();
+
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+    Orion.IgnoreReset();
+    FarmCleanState(100);
+
+    if (!FarmRecallOutOfBank(FARM_RUNEBOOK_OSSA_DOOM_VAR, FARM_RUNE_WITCH_HOOK, 'STREGA DOOM')) {
+        return;
+    }
+
+    Orion.IgnoreReset();
+    FarmCleanState(100);
+
+    RunRailBoneFarm(doomBoneRail);
+}
+
+function StopBoneScavenger() {
+    Orion.Terminate('StartBoneScavenger');
+    Orion.WarMode(false);
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+    Orion.Print(33, 'Bone Scavenger FERMATO.');
+}
+
+function RunRailBoneFarm(railCoordinates) {
+    var currentIndex = 0;
+    var noEnemySince = Orion.Now();
+    var lastSafetyCheck = 0;
+
+    while (!Player.Dead()) {
+        if (FarmShouldStop()) return;
+        if (FarmHandleBloodOath()) continue;
+
+        BoneCheckWeightAndSend();
+
+        var now = Orion.Now();
+
+        if (now - lastSafetyCheck > 3000) {
+            lastSafetyCheck = now;
+
+            var bankHere = FarmIsInBankArea();
+            var doomHere = FarmIsInDoomArea();
+            var enemyHere = FarmFindAnyEnemyNear(18);
+
+            if (enemyHere) {
+                noEnemySince = now;
+            }
+
+            if (bankHere && !doomHere) {
+                Orion.CharPrint(Player.Serial(), 33, 'BANCA rilevata durante farm Doom. Torno alla Strega.');
+                FarmRecallOutOfBank(FARM_RUNEBOOK_OSSA_DOOM_VAR, FARM_RUNE_WITCH_HOOK, 'STREGA DOOM');
+                Orion.IgnoreReset();
+                currentIndex = 0;
+                noEnemySince = Orion.Now();
+                FarmCleanState(150);
+                continue;
+            }
+
+            if (!enemyHere && !doomHere && (now - noEnemySince > 30000)) {
+                Orion.CharPrint(Player.Serial(), 33, '30s senza nemici e non vedo la Strega. Torno a Doom.');
+                FarmRecallOutOfBank(FARM_RUNEBOOK_OSSA_DOOM_VAR, FARM_RUNE_WITCH_HOOK, 'STREGA DOOM');
+                Orion.IgnoreReset();
+                currentIndex = 0;
+                noEnemySince = Orion.Now();
+                FarmCleanState(150);
+                continue;
+            }
+        }
+
+        if (currentIndex >= railCoordinates.length) currentIndex = 0;
+
+        var coord = railCoordinates[currentIndex];
+
+        Orion.WalkTo(coord[0], coord[1], Player.Z(), 1, 255, 1, 2, 2000);
+
+        var endScan = Orion.Now() + 100;
+
+        while (Orion.Now() < endScan) {
+            if (FarmShouldStop()) return;
+            if (FarmHandleBloodOath()) continue;
+
+            var target = FindNearestEnemy();
+
+            if (target) {
+                noEnemySince = Orion.Now();
+
+                var success = AttackNearestEnemy();
+
+                if (success) {
+                    BoneQuickLoot();
+                    BoneCheckWeightAndSend();
+                    endScan = Orion.Now() + 100;
+                }
+            } else {
+                Orion.Wait(50);
+            }
+        }
+
+        currentIndex++;
+        Orion.Wait(10);
+    }
+}
+
+function BoneQuickLoot() {
+    var lootEnd = Orion.Now() + 750;
+
+    while (!Player.Dead() && Orion.Now() < lootEnd) {
+        if (FarmShouldStop()) return;
+        if (FarmHandleBloodOath()) continue;
+
+        if (FarmIsWeightAtLimit()) return;
+
+        var danger = FarmFindAnyEnemyNear(3);
+
+        if (danger) {
+            Orion.Print(33, 'Nemico vicino durante loot ossa: interrompo loot.');
+            return;
+        }
+
+        var movedSomething = false;
+
+        var groundBones = Orion.FindType(bonesGraphic, 'any', 'ground', 'item|near', 3);
+
+        for (var i = 0; groundBones && i < groundBones.length; i++) {
+            if (FarmIsWeightAtLimit()) return;
+
+            danger = FarmFindAnyEnemyNear(3);
+            if (danger) return;
+
+            var bone = Orion.FindObject(groundBones[i]);
+
+            if (bone && bone.Distance() <= 3) {
+                Orion.MoveItem(bone.Serial(), 0, 'backpack');
+                Orion.Wait(70);
+                movedSomething = true;
+            }
+        }
+
+        var corpses = Orion.FindTypeEx('0x2006', 'any', 'ground', 'item|near', 3);
+
+        for (var c = 0; corpses && c < corpses.length; c++) {
+            if (FarmIsWeightAtLimit()) return;
+
+            danger = FarmFindAnyEnemyNear(3);
+            if (danger) return;
+
+            var corpse = corpses[c];
+            if (!corpse) continue;
+
+            Orion.UseObject(corpse.Serial());
+            Orion.Wait(70);
+
+            var corpseBones = Orion.FindType(bonesGraphic, 'any', corpse.Serial(), 'item|recurse');
+
+            for (var b = 0; corpseBones && b < corpseBones.length; b++) {
+                if (FarmIsWeightAtLimit()) return;
+
+                danger = FarmFindAnyEnemyNear(3);
+                if (danger) return;
+
+                Orion.MoveItem(corpseBones[b], 0, 'backpack');
+                Orion.Wait(70);
+                movedSomething = true;
+            }
+        }
+
+        if (!movedSomething) return;
+
+        Orion.Wait(40);
+    }
+}
+
+function BoneCheckWeightAndSend() {
+    if (!FarmIsWeightAtLimit()) return true;
+
+    Orion.Print(33, 'Peso al limite sicuro. Stato: ' + FarmWeightStatusText());
+    Orion.Print(33, 'Deposito ossa Doom in banca via recall.');
+
+    var bonesInPack = Orion.FindType(bonesGraphic, 'any', 'backpack', 'item|recurse');
+
+    if (!bonesInPack || bonesInPack.length <= 0) {
+        Orion.Print(33, 'Nessuna ossa nello zaino.');
+        return true;
+    }
+
+    if (!FarmDepositGraphicToBank(FARM_RUNEBOOK_OSSA_DOOM_VAR, bonesGraphic, 'Ossa Doom')) {
+        return false;
+    }
+
+    Orion.Print(65, 'Ritorno alla Strega Doom per riprendere la rail.');
+
+    if (!FarmRecallOutOfBank(FARM_RUNEBOOK_OSSA_DOOM_VAR, FARM_RUNE_WITCH_HOOK, 'STREGA DOOM')) {
+        return false;
+    }
+
+    Orion.IgnoreReset();
+    FarmCleanState(100);
+    return true;
+}
+
+
+// =====================================================
+// FARM OSSA CAMPANA
+// =====================================================
+
+function StartDragonFarmer() {
+    Orion.Print(65, '--- FARM OSSA CAMPANA AVVIATO ---');
+
+    if (!Orion.FindObject(FARM_RUNEBOOK_OSSA_CAMPANA_VAR)) {
+        Orion.CharPrint(Player.Serial(), 33, 'Runebook Ossa Campana non selezionato!');
+        return;
+    }
+
+    FarmStartProfile('DragonFarmer');
+    Orion.IgnoreReset();
+    FarmCleanState(100);
+
+    if (!FarmRetryUntilDone(function() {
+        return DragonGoToBellAndRing();
+    }, 'Vai alla campana e suona')) {
+        return;
+    }
+
+    while (!Player.Dead()) {
+        if (FarmShouldStop()) return;
+        if (FarmHandleBloodOath()) continue;
+
+        if (FarmIsInBankArea() && !IsNearBell()) {
+            Orion.CharPrint(Player.Serial(), 33, 'Sono in banca ma dovrei farmare Campana. Torno alla campana.');
+
+            if (!FarmRetryUntilDone(function() {
+                return DragonGoToBellAndRing();
+            }, 'Ritorno sicuro alla campana dalla banca')) {
+                return;
+            }
+
+            Orion.IgnoreReset();
+            FarmCleanState(100);
+            continue;
+        }
+
+        DragonCheckWeightAndSend();
+
+        var enemies = Orion.FindTypeEx('any', 'any', 'ground', targetFlags, 4, targetNoto);
+
+        if (enemies && enemies.length > 0) {
+            var target = enemies[0].Serial();
+
+            Orion.Print(33, 'Drago rilevato. Attacco...');
+
+            DragonExecuteCombat(target);
+            LootLastDragonCorpse();
+
+            Orion.ClearJournal();
+            lastClickTime = 0;
+
+            DragonCheckWeightAndSend();
+
+            if (!FarmRetryUntilDone(function() {
+                return DragonGoToBellAndRing();
+            }, 'Ritorno alla campana e suona')) {
+                return;
+            }
+        } else {
+            var now = Orion.Now();
+
+            if (Orion.InJournal(msgAlreadySummoned)) {
+                Orion.Print(33, 'Drago evocato ma non ancora visibile. Attendo spawn...');
+                Orion.Wait(2000);
+                continue;
+            }
+
+            if (now - lastClickTime > 7000) {
+                Orion.ClearJournal();
+
+                if (!FarmRetryUntilDone(function() {
+                    return DragonGoToBellAndRing();
+                }, 'Vai alla campana e suona')) {
+                    return;
+                }
+
+                lastClickTime = now;
+                Orion.Wait(1500);
+
+                if (Orion.InJournal(msgAlreadySummoned)) {
+                    Orion.Print(33, 'Server conferma: Drago gia presente.');
+                }
+            } else {
+                Orion.Wait(500);
+            }
+        }
+
+        Orion.Wait(200);
+    }
+}
+
+function StopDragonFarmer() {
+    Orion.Terminate('StartDragonFarmer');
+    Orion.WarMode(false);
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+    Orion.Print(33, 'Dragon Farmer FERMATO.');
+}
+
+function DragonGoToBellAndRing() {
+    FarmCleanState(100);
+
+    if (FarmIsInBankArea() || Orion.GetDistance(bellPos.x, bellPos.y) > 10) {
+        Orion.Print(65, 'Campana lontana o banca rilevata: recall runa 7.');
+
+        if (!FarmRecallRune(FARM_RUNEBOOK_OSSA_CAMPANA_VAR, FARM_RUNE_CAMPANA_HOOK, 'CAMPANA')) {
+            return false;
+        }
+
+        Orion.Wait(1200);
+
+        if (FarmIsInBankArea()) {
+            Orion.Print(33, 'Recall campana non riuscito: sono ancora in banca.');
+            return false;
+        }
+
+        if (Orion.GetDistance(bellPos.x, bellPos.y) > 25) {
+            Orion.Print(33, 'Recall campana non confermato: sono ancora troppo lontano dalla campana.');
+            return false;
+        }
+    }
+
+    Orion.Print(65, 'Vado diretto alla campana: ' + bellPos.x + ',' + bellPos.y);
+
+    var tiles = [
+        [bellPos.x + 1, bellPos.y],
+        [bellPos.x - 1, bellPos.y],
+        [bellPos.x, bellPos.y + 1],
+        [bellPos.x, bellPos.y - 1],
+        [bellPos.x + 1, bellPos.y + 1],
+        [bellPos.x + 1, bellPos.y - 1],
+        [bellPos.x - 1, bellPos.y + 1],
+        [bellPos.x - 1, bellPos.y - 1],
+        [bellPos.x + 2, bellPos.y],
+        [bellPos.x - 2, bellPos.y],
+        [bellPos.x, bellPos.y + 2],
+        [bellPos.x, bellPos.y - 2]
+    ];
+
+    for (var i = 0; i < tiles.length; i++) {
+        if (FarmShouldStop()) return false;
+        if (FarmHandleBloodOath()) continue;
+
+        if (FarmIsInBankArea()) {
+            Orion.Print(33, 'Banca rilevata mentre andavo alla campana. Recall da rifare.');
+            return false;
+        }
+
+        Orion.WalkTo(tiles[i][0], tiles[i][1], Player.Z(), 1, 255, 1, 2, 3000);
+        Orion.Wait(220);
+
+        Orion.Print(65, 'Provo campana da distanza: ' + Orion.GetDistance(bellPos.x, bellPos.y));
+        Orion.UseObject(bellSerial);
+        Orion.Wait(500);
+
+        if (Orion.InJournal(msgAlreadySummoned) || Orion.GetDistance(bellPos.x, bellPos.y) <= 2) {
+            Orion.Print(65, 'Campana usata o raggiunta.');
+            return true;
+        }
+    }
+
+    Orion.Print(33, 'Non sono riuscito ad arrivare al tile campana. Provo comunque UseObject.');
+    Orion.UseObject(bellSerial);
+    Orion.Wait(500);
+
+    if (Orion.InJournal(msgAlreadySummoned) || Orion.GetDistance(bellPos.x, bellPos.y) <= 2) {
+        Orion.Print(65, 'Campana usata o raggiunta dopo tentativo finale.');
+        return true;
+    }
+
+    Orion.Print(33, 'Campana non confermata. Riprovo step.');
+    return false;
+}
+
+function IsNearBell() {
+    return Orion.GetDistance(bellPos.x, bellPos.y) <= bellUseRange;
+}
+
+function ReturnToBell() {
+    DragonGoToBellAndRing();
+}
+
+function UseBell() {
+    Orion.UseObject(bellSerial);
+    Orion.Wait(700);
+}
+
+function DragonExecuteCombat(serial) {
+    var mob = Orion.FindObject(serial);
+    if (!mob) return;
+
+    Orion.WarMode(true);
+    Orion.Attack(serial);
+
+    while (mob && !mob.Dead() && Orion.ObjectExists(serial)) {
+        if (FarmShouldStop()) return;
+        if (FarmHandleBloodOath()) continue;
+
+        mob = Orion.FindObject(serial);
+        if (!mob || mob.Dead()) break;
+
+        if (!Player.WarMode() || Orion.ClientLastAttack() !== serial) {
+            Orion.WarMode(true);
+            Orion.Attack(serial);
+        }
+
+        if (Orion.GetDistance(serial) > 1) {
+            Orion.WalkTo(mob.X(), mob.Y(), mob.Z(), 1, 255, 1, 2, 500);
+        }
+
+        var nearbyCount = Orion.FindType('any', 'any', 'ground', 'live|ignoreself', 2, targetNoto).length;
+
+        if (nearbyCount > 1) {
+            if (!Orion.AbilityStatus('Secondary')) Orion.UseAbility('Secondary', true);
+        } else {
+            if (!Orion.AbilityStatus('Primary')) Orion.UseAbility('Primary', true);
+        }
+
+        Orion.Wait(250);
+        mob = Orion.FindObject(serial);
+    }
+
+    Orion.WarMode(false);
+    Orion.Print(65, 'Drago eliminato.');
+}
+
+function LootLastDragonCorpse() {
+    Orion.Print(55, 'Cerco corpo drago per loot ossa...');
+
+    var corpse = FindNearestCorpseForLoot();
+
+    if (!corpse) {
+        Orion.Print(33, 'Nessun corpse trovato vicino.');
+        return;
+    }
+
+    Orion.UseObject(corpse.Serial());
+    Orion.Wait(300);
+
+    var timeout = Orion.Now() + 4000;
+
+    while (!Player.Dead() && Orion.Now() < timeout) {
+        if (FarmShouldStop()) return;
+        if (FarmHandleBloodOath()) continue;
+
+        if (FarmFindAnyEnemyNear(3)) {
+            Orion.Print(33, 'Nemico vicino durante loot drago: interrompo loot.');
+            return;
+        }
+
+        if (FarmIsWeightAtLimit()) {
+            Orion.Print(33, 'Peso 85% raggiunto durante loot drago. Stop loot e banca.');
+            return;
+        }
+
+        var bones = Orion.FindType(bonesGraphic, 'any', corpse.Serial(), 'item|recurse');
+
+        if (!bones || bones.length <= 0) {
+            Orion.Wait(100);
+            bones = Orion.FindType(bonesGraphic, 'any', corpse.Serial(), 'item|recurse');
+
+            if (!bones || bones.length <= 0) {
+                Orion.Print(65, 'Loot ossa completato o nessuna ossa nel corpse.');
+                return;
+            }
+        }
+
+        for (var i = 0; i < bones.length; i++) {
+            if (FarmShouldStop()) return;
+            if (FarmIsWeightAtLimit()) return;
+            if (FarmFindAnyEnemyNear(3)) return;
+            if (!Orion.ObjectExists(bones[i])) continue;
+
+            Orion.MoveItem(bones[i], 0, 'backpack');
+            Orion.Wait(220);
+        }
+
+        Orion.Wait(80);
+    }
+
+    Orion.Print(33, 'Timeout loot corpse.');
+}
+
+function DragonCheckWeightAndSend() {
+    if (!FarmIsWeightAtLimit()) return true;
+
+    Orion.Print(33, 'Peso al limite sicuro. Stato: ' + FarmWeightStatusText());
+    Orion.Print(33, 'Deposito ossa Campana in banca via recall.');
+
+    var bonesInPack = Orion.FindType(bonesGraphic, 'any', 'backpack', 'item|recurse');
+
+    if (!bonesInPack || bonesInPack.length <= 0) {
+        Orion.Print(33, 'Nessuna ossa trovata nello zaino.');
+        return true;
+    }
+
+    if (!FarmDepositGraphicToBank(FARM_RUNEBOOK_OSSA_CAMPANA_VAR, bonesGraphic, 'Ossa Campana')) {
+        return false;
+    }
+
+    Orion.Print(65, 'Ritorno alla campana.');
+
+    if (!FarmRetryUntilDone(function() {
+        return DragonGoToBellAndRing();
+    }, 'Recall campana dopo deposito')) {
+        return false;
+    }
+
+    if (FarmIsInBankArea()) {
+        Orion.Print(33, 'Sono ancora in banca dopo ritorno campana. Riprovo.');
+        return false;
+    }
+
+    Orion.IgnoreReset();
+    CampanaCleanState(100);
+    return true;
+}
+
+function FindNearestCorpseForLoot() {
+    var corpses = Orion.FindTypeEx('0x2006', 'any', 'ground', 'item|near', 4);
+
+    if (!corpses || !corpses.length) return null;
+
+    corpses.sort(function(a, b) {
+        return a.Distance() - b.Distance();
+    });
+
+    return corpses[0];
+}
+
+
+// =====================================================
+// FARM SKULL DOOM - CONFIG
+// =====================================================
+
+var SKULL_BONES_GRAPHIC = '0x0F80';
+var SKULL_QUEST_TOTAL = 1000;
+
+var VICTORIA_SERIAL = '0x00001AA8';
+var VICTORIA_GRAPHIC = '0x0191';
+var VICTORIA_COLOR = '0x8835';
+var VICTORIA_CONTEXT_QUEST = 3;
+
+var VICTORIA_GUMP_1 = '0x92AF4E20';
+var VICTORIA_GUMP_2 = '0xA01862EA';
+
+var SKULL_FINAL_GUMP_ID = '0xA01862EA';
+var SKULL_FINAL_OK_HOOK = 1;
+
+var BONE_DEMON_X = 441;
+var BONE_DEMON_Y = 205;
+var BONE_DEMON_Z = -1;
+
+var GOLDEN_SKULL_NAME = 'golden skull';
+var SKULL_RETRY_WAIT = 1200;
+var SKULL_ENEMY_RANGE = 8;
+
+
+// =====================================================
+// FARM SKULL DOOM - START / STOP
+// =====================================================
+
+function StartSkullDoomFarmer() {
+    Orion.Print(65, '=== FARM SKULL DOOM AVVIATO ===');
+
+    if (!Orion.FindObject(SKULL_RUNEBOOK_VAR)) {
+        Orion.CharPrint(Player.Serial(), 33, 'Runebook Skull Doom non selezionato!');
+        return;
+    }
+
+    Orion.SetGlobal('StopAllScripts', 'false');
+    SkullClean();
+
+    while (!Player.Dead()) {
+        if (SkullShouldStop()) return;
+
+        Orion.Print(65, '--- NUOVO CICLO SKULL DOOM ---');
+
+        var delivered = 0;
+        var carried = 0;
+        var moved = 0;
+
+        SkullRetryUntilDone(function() {
+            return SkullGoWitchAndAcceptQuest();
+        }, 'Accetta quest Victoria');
+
+        while (!Player.Dead() && delivered < SKULL_QUEST_TOTAL) {
+            if (SkullShouldStop()) return;
+
+            var remaining = SKULL_QUEST_TOTAL - delivered;
+
+            carried = 0;
+            moved = 0;
+
+            SkullRetryUntilDone(function() {
+                carried = SkullGoBankAndPrepareBonesDynamic(remaining);
+                return carried > 0;
+            }, 'Banca: prepara ossa in base al peso residuo. Restano ' + remaining);
+
+            SkullRetryUntilDone(function() {
+                moved = SkullGoWitchAndDeliverAllBonesBulk();
+                return moved > 0;
+            }, 'Strega: consegna bulk tutte le ossa nello zaino');
+
+            delivered += moved;
+            if (delivered > SKULL_QUEST_TOTAL) delivered = SKULL_QUEST_TOTAL;
+
+            Orion.CharPrint(Player.Serial(), 65, 'Skull Doom: ' + delivered + '/' + SKULL_QUEST_TOTAL);
+            Orion.Print(65, 'Skull Doom consegnate questo giro: ' + moved + '. Totale: ' + delivered + '/' + SKULL_QUEST_TOTAL);
+            Orion.Wait(400);
+        }
+
+        SkullRetryUntilDone(function() {
+            return SkullAcceptFinalGump();
+        }, 'Conferma gump finale');
+
+        SkullRetryUntilDone(function() {
+            return SkullKillBoneDemon();
+        }, 'Uccidi Bone Demon');
+
+        SkullRetryUntilDone(function() {
+            return SkullLootGoldenSkull();
+        }, 'Loot Golden Skull');
+
+        SkullRetryUntilDone(function() {
+            return SkullDepositGoldenSkullToBank();
+        }, 'Deposita Golden Skull');
+
+        Orion.Print(65, '--- CICLO COMPLETATO, RIPARTO ---');
+        Orion.Wait(800);
+    }
+}
+
+function StopSkullDoomFarmer() {
+    Orion.Terminate('StartSkullDoomFarmer');
+    SkullStopLocalCombat();
+    Orion.Terminate('SkullClickEverythingAround1Tile');
+    Orion.Print(33, 'Farm Skull Doom fermato.');
+}
+
+
+// =====================================================
+// FARM SKULL DOOM - CORE
+// =====================================================
+
+function SkullShouldStop() {
+    return Player.Dead() || Orion.GetGlobal('StopAllScripts') === 'true';
+}
+
+function SkullRetryUntilDone(actionFn, label) {
+    while (!Player.Dead()) {
+        if (SkullShouldStop()) return false;
+
+        SkullClean();
+        Orion.Print(65, '[SKULL] ' + label);
+
+        if (actionFn()) {
+            Orion.Print(65, '[SKULL OK] ' + label);
+            return true;
+        }
+
+        Orion.CharPrint(Player.Serial(), 33, label + ' fallito. Riprovo stesso step.');
+        Orion.Wait(SKULL_RETRY_WAIT);
+    }
+
+    return false;
+}
+
+function SkullClean() {
+    FarmCleanState(125);
+}
+
+function SkullStopLocalCombat() {
+    Orion.WarMode(false);
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+
+    try {
+        Orion.Terminate('SoloFollowAndAttack');
+    } catch (e1) {}
+
+    try {
+        Orion.Terminate('SoloFollowAndAttackSS');
+    } catch (e2) {}
+
+    try {
+        Orion.Terminate('AutoArcheryAttack');
+    } catch (e3) {}
+
+    Orion.SetGlobal('LastEnemySerial', '');
+    Orion.SetGlobal('global_enemy', '0x000');
+    Orion.Wait(150);
+}
+
+function SkullHandleBloodOathFromCore() {
+    if (typeof HandleBloodOath === 'function') return HandleBloodOath();
+    return false;
+}
+
+function SkullHonorFromCore(target) {
+    if (!target) return false;
+
+    if (typeof HonorEnemy === 'function') return HonorEnemy(target);
+    if (typeof HonorTarget === 'function') return HonorTarget(target);
+
+    return false;
+}
+
+function SkullIsIgnoredSummonSafe(mob) {
+    if (typeof IsIgnoredSummon === 'function') return IsIgnoredSummon(mob);
+    return false;
+}
+
+function SkullRecallBank() {
+    return FarmRecallRune(SKULL_RUNEBOOK_VAR, FARM_RUNE_BANK_HOOK, 'BANCA');
+}
+
+function SkullRecallWitch() {
+    return FarmRecallRune(SKULL_RUNEBOOK_VAR, FARM_RUNE_WITCH_HOOK, 'STREGA DOOM');
+}
+
+
+// =====================================================
+// FARM SKULL DOOM - BANCA / OSSA PESO DINAMICO
+// =====================================================
+
+function SkullGoBankAndPrepareBonesDynamic(remainingQuestBones) {
+    if (!SkullRecallBank()) return 0;
+    return SkullPrepareBonesFromBankDynamic(remainingQuestBones);
+}
+
+function SkullGetCarryableBonesAmountMaxMinus10(wantedAmount) {
+    FarmRefreshWeight();
+
+    var maxAllowedWeight = Math.floor(Player.MaxWeight() - 10);
+    var free = maxAllowedWeight - Player.Weight();
+
+    if (free < 0) free = 0;
+
+    free = Math.floor(free);
+
+    if (wantedAmount < free) return wantedAmount;
+
+    return free;
+}
+
+function SkullPrepareBonesFromBankDynamic(remainingQuestBones) {
+    var already = SkullCountBonesInBackpack();
+
+    if (already > 0) {
+        Orion.Print(65, 'Ho gia ' + already + ' ossa nello zaino. Le consegno prima di prelevare altro.');
+        return already;
+    }
+
+    var canCarry = SkullGetCarryableBonesAmountMaxMinus10(remainingQuestBones);
+
+    if (canCarry <= 0) {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessun peso disponibile per prelevare ossa lasciando 10 stone libere. Stato: ' + FarmWeightStatusText());
+        return 0;
+    }
+
+    Orion.Print(65, 'Peso dinamico Skull MaxWeight-10: posso portare ' + canCarry + ' ossa. Stato: ' + FarmWeightStatusText());
+
+    if (!SkullWithdrawBonesFromBank(canCarry)) return 0;
+
+    var nowInPack = SkullCountBonesInBackpack();
+
+    if (nowInPack > remainingQuestBones) nowInPack = remainingQuestBones;
+
+    Orion.CharPrint(Player.Serial(), 65, 'Skull: pronte ' + nowInPack + ' ossa da consegnare.');
+    return nowInPack;
+}
+
+function SkullWithdrawBonesFromBank(amount) {
+    Orion.Print(65, 'Apro banca e prelevo ' + amount + ' ossa.');
+
+    SkullClean();
+
+    var before = SkullCountBonesInBackpack();
+    var boneSerial = null;
+
+    for (var attempt = 1; attempt <= 6; attempt++) {
+        Orion.Say('bank');
+        Orion.Wait(500);
+
+        var bones = Orion.FindType(SKULL_BONES_GRAPHIC, 'any', 'bank', 'item|recurse');
+
+        if (!bones || bones.length <= 0) {
+            bones = Orion.FindType(SKULL_BONES_GRAPHIC, 'any', 'lastcontainer', 'item|recurse');
+        }
+
+        if (bones && bones.length > 0) {
+            boneSerial = bones[0];
+            break;
+        }
+
+        Orion.Print(33, 'Ossa non viste in banca, ritento ' + attempt + '/6');
+        Orion.Wait(400);
+    }
+
+    if (!boneSerial) {
+        Orion.CharPrint(Player.Serial(), 33, 'Ossa non trovate in banca.');
+        return false;
+    }
+
+    Orion.MoveItem(boneSerial, amount, 'backpack');
+    Orion.Wait(900);
+
+    var moved = SkullCountBonesInBackpack() - before;
+
+    if (moved <= 0) {
+        Orion.CharPrint(Player.Serial(), 33, 'Prelievo ossa fallito.');
+        return false;
+    }
+
+    Orion.CharPrint(Player.Serial(), 65, 'Prese ' + moved + ' ossa.');
+    return true;
+}
+
+function SkullCountBonesInBackpack() {
+    return FarmCountGraphicInBackpack(SKULL_BONES_GRAPHIC);
+}
+
+
+// =====================================================
+// FARM SKULL DOOM - VICTORIA / QUEST
+// =====================================================
+
+function SkullGoWitchAndAcceptQuest() {
+    if (!SkullRecallWitch()) return false;
+
+    SkullDispelBeforeVictoria();
+
+    if (!SkullFindVictoria()) return false;
+
+    return SkullAcceptQuest();
+}
+
+function SkullGoWitchAndDeliverAllBonesBulk() {
+    if (!SkullRecallWitch()) return 0;
+
+    SkullDispelBeforeVictoria();
+
+    if (!SkullFindVictoria()) return 0;
+
+    return SkullDeliverAllBonesToVictoriaBulk();
+}
+
+function SkullFindVictoria() {
+    var fixed = Orion.FindObject(VICTORIA_SERIAL);
+
+    if (fixed && Orion.ObjectExists(fixed.Serial()) && fixed.Distance() <= 30) return fixed;
+
+    var npcs = Orion.FindTypeEx(VICTORIA_GRAPHIC, VICTORIA_COLOR, 'ground', 'mobile|live|near', 30, 'any');
+
+    if (!npcs || npcs.length <= 0) return null;
+
+    for (var i = 0; i < npcs.length; i++) {
+        var npc = npcs[i];
+        if (!npc) continue;
+
+        var name = npc.Name ? (npc.Name() || '').toLowerCase() : '';
+        var props = npc.Properties ? (npc.Properties() || '').toLowerCase() : '';
+
+        if (name.indexOf('victoria') !== -1 || props.indexOf('victoria') !== -1 || props.indexOf('sorceress') !== -1) {
+            return npc;
+        }
+    }
+
+    return npcs[0];
+}
+
+function SkullWalkToVictoria() {
+    var victoria = SkullFindVictoria();
+
+    if (!victoria) return false;
+
+    if (victoria.Distance() > 2) {
+        Orion.WalkTo(victoria.X(), victoria.Y(), victoria.Z(), 1, 255, 1, 2, 3000);
+        Orion.Wait(300);
+    }
+
+    victoria = SkullFindVictoria();
+
+    return !!victoria && victoria.Distance() <= 3;
+}
+
+function SkullAcceptQuest() {
+    if (!SkullWalkToVictoria()) return false;
+
+    var victoria = SkullFindVictoria();
+    if (!victoria) return false;
+
+    Orion.Print(65, 'Apro quest Victoria.');
+    SkullClean();
+
+    Orion.RequestContextMenu(victoria.Serial());
+    Orion.WaitContextMenuID(victoria.Serial(), VICTORIA_CONTEXT_QUEST);
+
+    var clicked = false;
+
+    if (Orion.WaitForGump(1500)) {
+        var g0 = Orion.GetGump('last');
+
+        if (g0 !== null && !g0.Replayed() && g0.ID() === VICTORIA_GUMP_1) {
+            g0.Select(Orion.CreateGumpHook(1));
+            clicked = true;
+            Orion.Wait(200);
+        }
+    }
+
+    if (Orion.WaitForGump(1500)) {
+        var g1 = Orion.GetGump('last');
+
+        if (g1 !== null && !g1.Replayed() && g1.ID() === VICTORIA_GUMP_2) {
+            g1.Select(Orion.CreateGumpHook(1));
+            clicked = true;
+            Orion.Wait(200);
+        }
+    }
+
+    SkullClean();
+
+    if (!clicked) {
+        Orion.Print(33, 'Quest gump Victoria non confermato.');
+        return false;
+    }
+
+    Orion.CharPrint(Player.Serial(), 65, 'Quest Victoria accettata.');
+    return true;
+}
+
+function SkullDeliverAllBonesToVictoriaBulk() {
+    if (!SkullWalkToVictoria()) return 0;
+
+    var victoria = SkullFindVictoria();
+    if (!victoria) return 0;
+
+    var before = SkullCountBonesInBackpack();
+
+    if (before <= 0) {
+        Orion.CharPrint(Player.Serial(), 33, 'Nessuna ossa nello zaino.');
+        return 0;
+    }
+
+    var bones = Orion.FindType(SKULL_BONES_GRAPHIC, 'any', 'backpack', 'item|recurse');
+
+    if (!bones || bones.length <= 0) return 0;
+
+    var bone = Orion.FindObject(bones[0]);
+    if (!bone) return 0;
+
+    Orion.Print(65, 'Consegna bulk a Victoria: ' + before + ' ossa in un blocco.');
+    SkullClean();
+
+    Orion.MoveItem(bone.Serial(), 0, victoria.Serial());
+    Orion.Wait(1400);
+
+    SkullClean();
+
+    var after = SkullCountBonesInBackpack();
+    var moved = before - after;
+
+    if (moved <= 0) {
+        Orion.Wait(1000);
+        after = SkullCountBonesInBackpack();
+        moved = before - after;
+    }
+
+    if (moved <= 0) {
+        Orion.CharPrint(Player.Serial(), 33, 'Consegna bulk fallita: ossa ancora nello zaino. Riprovo.');
+        return 0;
+    }
+
+    Orion.CharPrint(Player.Serial(), 65, 'Consegnate bulk: ' + moved + ' ossa.');
+    return moved;
+}
+
+function SkullDispelBeforeVictoria() {
+    var enemies = SkullFindNearbyEnemies(SKULL_ENEMY_RANGE);
+
+    if (!enemies || enemies.length <= 0) return true;
+
+    Orion.Print(33, 'Nemici vicini alla strega: Dispel Evil.');
+    SkullClean();
+
+    Orion.Cast('Dispel Evil');
+    Orion.Wait(500);
+
+    return true;
+}
+
+function SkullFindNearbyEnemies(range) {
+    var found = Orion.FindTypeEx('any', 'any', 'ground', 'mobile|live|near|inlos|ignoreself|ignorefriends', range, 'gray|criminal|red|enemy|orange');
+    var valid = [];
+
+    if (!found || found.length <= 0) return valid;
+
+    for (var i = 0; i < found.length; i++) {
+        var mob = found[i];
+        if (!mob) continue;
+        if (SkullIsIgnoredSummonSafe(mob)) continue;
+
+        valid.push(mob);
+    }
+
+    return valid;
+}
+
+
+// =====================================================
+// FARM SKULL DOOM - FINALE / BONE DEMON
+// =====================================================
+
+function SkullAcceptFinalGump() {
+    Orion.Print(65, 'Attendo gump finale Skull Doom.');
+
+    var timeout = Orion.Now() + 5000;
+
+    while (Orion.Now() < timeout) {
+        if (Orion.WaitForGump(350)) {
+            var g = Orion.GetGump('last');
+
+            if (g !== null && !g.Replayed() && g.ID() === SKULL_FINAL_GUMP_ID) {
+                g.Select(Orion.CreateGumpHook(SKULL_FINAL_OK_HOOK));
+                Orion.Wait(400);
+                SkullClean();
+                Orion.CharPrint(Player.Serial(), 65, 'Gump finale confermato.');
+                return true;
+            }
+
+            if (g !== null) {
+                try {
+                    g.Close();
+                } catch (e) {}
+            }
+        }
+
+        Orion.Wait(80);
+    }
+
+    Orion.Print(33, 'Gump finale non trovato.');
+    return false;
+}
+
+function SkullKillBoneDemon() {
+    SkullStopLocalCombat();
+
+    Orion.Print(65, 'Vado al Bone Demon.');
+    Orion.WalkTo(BONE_DEMON_X, BONE_DEMON_Y, BONE_DEMON_Z, 1, 255, 1, 2, 8000);
+    Orion.Wait(350);
+
+    var demon = SkullFindBoneDemon();
+
+    if (!demon) {
+        Orion.Print(33, 'Bone Demon non trovato.');
+        return false;
+    }
+
+    var demonSerial = demon.Serial();
+
+    Orion.CharPrint(demonSerial, 33, '*BONE DEMON*');
+    Orion.AddHighlightCharacter(demonSerial, 33, true);
+
+    FarmStartProfile('Skull Bone Demon');
+    SkullHonorFromCore(demon);
+
+    var timeout = Orion.Now() + 240000;
+
+    while (!Player.Dead() && Orion.Now() < timeout) {
+        if (SkullShouldStop()) return false;
+
+        if (SkullHandleBloodOathFromCore()) {
+            Orion.Wait(80);
+            continue;
+        }
+
+        demon = Orion.FindObject(demonSerial);
+
+        if (!demon || !Orion.ObjectExists(demonSerial) || demon.Dead()) {
+            Orion.Print(65, 'Bone Demon morto.');
+            SkullStopLocalCombat();
+            return true;
+        }
+
+        SkullFightTargetOnly(demonSerial);
+        Orion.Wait(80);
+    }
+
+    SkullStopLocalCombat();
+    Orion.Print(33, 'Timeout fight Bone Demon.');
+    return false;
+}
+
+function SkullFindBoneDemon() {
+    var mobs = Orion.FindTypeEx('any', 'any', 'ground', 'mobile|live|near|inlos', 20, 'gray|criminal|red|enemy|orange');
+
+    if (!mobs || mobs.length <= 0) return null;
+
+    for (var i = 0; i < mobs.length; i++) {
+        var mob = mobs[i];
+        if (!mob) continue;
+
+        var name = mob.Name ? (mob.Name() || '').toLowerCase() : '';
+        var props = mob.Properties ? (mob.Properties() || '').toLowerCase() : '';
+
+        if (name.indexOf('bone demon') !== -1 || props.indexOf('bone demon') !== -1) return mob;
+    }
+
+    return null;
+}
+
+function SkullFightTargetOnly(serial) {
+    var enemy = Orion.FindObject(serial);
+
+    if (!enemy || !Orion.ObjectExists(serial) || enemy.Dead()) return false;
+
+    if (enemy.Distance() > 1) {
+        Orion.WalkTo(enemy.X(), enemy.Y(), enemy.Z(), 1, 255, 1, 2, 2500);
+        Orion.Wait(80);
+    }
+
+    if (enemy.Distance() <= 12) {
+        Orion.WarMode(true);
+        Orion.Attack(serial);
+        Orion.ClientLastTarget(serial);
+        Orion.TargetSystemSerial(serial);
+    }
+
+    if (Player.Mana() >= 17 && !Orion.AbilityStatus('Primary')) Orion.UseAbility('Primary');
+
+    Orion.Attack(serial);
+
+    return true;
+}
+
+
+// =====================================================
+// FARM SKULL DOOM - GOLDEN SKULL
+// =====================================================
+
+function SkullLootGoldenSkull() {
+    SkullStopLocalCombat();
+
+    Orion.Print(65, 'Bone Demon morto: avvio click corpo per Golden Skull.');
+
+    if (!Orion.ScriptRunning('SkullClickEverythingAround1Tile')) {
+        Orion.Exec('SkullClickEverythingAround1Tile', 'true');
+    }
+
+    var timeout = Orion.Now() + 45000;
+
+    while (!Player.Dead() && Orion.Now() < timeout) {
+        if (SkullShouldStop()) {
+            Orion.Terminate('SkullClickEverythingAround1Tile');
+            return false;
+        }
+
+        if (SkullHasGoldenSkull()) {
+            Orion.Terminate('SkullClickEverythingAround1Tile');
+            Orion.CharPrint(Player.Serial(), 65, '*GOLDEN SKULL LOOTATO*');
+            SkullClearNearbyMobsBeforeRecall();
+            return true;
+        }
+
+        Orion.Wait(250);
+    }
+
+    Orion.Terminate('SkullClickEverythingAround1Tile');
+    Orion.CharPrint(Player.Serial(), 33, 'Golden Skull non trovato.');
+    return false;
+}
+
+function SkullClickEverythingAround1Tile() {
+    while (true) {
+        var objects = Orion.FindTypeEx('any', 'any', 'ground', 'any', 1);
+
+        for (var i = 0; objects && i < objects.length; i++) {
+            var obj = objects[i];
+
+            if (obj && obj.Serial() !== Player.Serial()) {
+                Orion.UseObject(obj.Serial());
+                Orion.Wait(80);
+            }
+        }
+
+        Orion.Wait(80);
+    }
+}
+
+function SkullHasGoldenSkull() {
+    var skulls = SkullFindGoldenSkullsInBackpack();
+    return skulls && skulls.length > 0;
+}
+
+function SkullFindGoldenSkullsInBackpack() {
+    var result = [];
+    var items = Orion.FindType('any', 'any', 'backpack', 'item|recurse');
+
+    if (!items || items.length <= 0) return result;
+
+    for (var i = 0; i < items.length; i++) {
+        var obj = Orion.FindObject(items[i]);
+        if (!obj) continue;
+
+        var name = obj.Name ? (obj.Name() || '').toLowerCase() : '';
+        var props = obj.Properties ? (obj.Properties() || '').toLowerCase() : '';
+
+        if (name.indexOf(GOLDEN_SKULL_NAME) !== -1 || props.indexOf(GOLDEN_SKULL_NAME) !== -1) {
+            result.push(obj.Serial());
+        }
+    }
+
+    return result;
+}
+
+function SkullClearNearbyMobsBeforeRecall() {
+    Orion.Print(65, 'Pulizia mob vicini prima del recall banca.');
+
+    var timeout = Orion.Now() + 60000;
+
+    while (!Player.Dead() && Orion.Now() < timeout) {
+        if (SkullShouldStop()) return false;
+
+        if (SkullHandleBloodOathFromCore()) {
+            Orion.Wait(100);
+            continue;
+        }
+
+        var mob = SkullFindNearestAnyEnemy(12);
+
+        if (!mob) {
+            SkullStopLocalCombat();
+            Orion.Print(65, 'Area pulita. Posso recallare in banca.');
+            return true;
+        }
+
+        SkullFightTargetOnly(mob.Serial());
+        Orion.Wait(100);
+    }
+
+    SkullStopLocalCombat();
+    Orion.Print(33, 'Timeout pulizia mob. Proseguo comunque al recall banca.');
+    return true;
+}
+
+function SkullFindNearestAnyEnemy(range) {
+    var enemies = SkullFindNearbyEnemies(range);
+
+    if (!enemies || enemies.length <= 0) return null;
+
+    enemies.sort(function(a, b) {
+        return a.Distance() - b.Distance();
+    });
+
+    return enemies[0];
+}
+
+function SkullDepositGoldenSkullToBank() {
+    SkullStopLocalCombat();
+
+    if (!SkullRecallBank()) return false;
+
+    var bankContainer = FarmOpenBankAndGetContainer();
+
+    if (!bankContainer) {
+        Orion.CharPrint(Player.Serial(), 33, 'Bank container non trovato.');
+        return false;
+    }
+
+    var skulls = SkullFindGoldenSkullsInBackpack();
+
+    if (!skulls || skulls.length <= 0) {
+        Orion.Print(65, 'Nessun Golden Skull nello zaino. Deposito gia fatto.');
+        return true;
+    }
+
+    for (var i = 0; i < skulls.length; i++) {
+        var skull = Orion.FindObject(skulls[i]);
+        if (!skull) continue;
+
+        Orion.Print(65, 'Deposito Golden Skull: ' + skull.Serial());
+        Orion.MoveItem(skull.Serial(), 0, bankContainer);
+        Orion.Wait(600);
+    }
+
+    Orion.Wait(500);
+
+    skulls = SkullFindGoldenSkullsInBackpack();
+
+    if (skulls && skulls.length > 0) {
+        Orion.CharPrint(Player.Serial(), 33, 'Golden Skull ancora nello zaino.');
+        return false;
+    }
+
+    Orion.CharPrint(Player.Serial(), 65, '*GOLDEN SKULL DEPOSITATO*');
+    return true;
+}
+
+
+// =====================================================
+// FARM FUNGHI SOLEN - CONFIG
+// =====================================================
+
+var FUNGI_BANK_LIMIT = 500;
+var FUNGI_RUNE_BANK_HOOK = 7;
+var FUNGI_RUNEBOOK_GUMP_ID = '0x554B87F3';
+var FUNGI_RECALL_WAIT = 800;
+var FUNGI_LOOT_RANGE = 4;
+var FUNGI_MOB_RANGE = 30;
+var FUNGI_WALK_TIMEOUT = 5000;
+var FUNGI_POINT_COMBAT_TIME = 100;
+
+var FUNGI_FARM_ROUTES = [
+    {
+        name: 'TRINSIC FEL',
+        runeHook: 19,
+        coords: [[1981,3298], [1966,3288], [1991,3336], [1946,3313], [1946,3342], [2028,3332], [2015,3318], [1995,3300]]
+    },
+    {
+        name: 'TRINSIC TRAM',
+        runeHook: 25,
+        coords: [[1988,3309], [2006,3331], [1996,3348], [2024,3336], [2039,3353], [1987,3339], [1956,3317], [1985,3297]]
+    },
+    {
+        name: 'WIND FEL',
+        runeHook: 31,
+        coords: [[1374,956], [1352,941], [1375,948], [1387,933], [1404,939], [1392,956], [1403,972], [1379,974], [1364,974], [1355,959]]
+    },
+    {
+        name: 'WIND TRAM',
+        runeHook: 37,
+        coords: [[1365,934], [1351,946], [1372,957], [1379,944], [1398,933], [1389,955], [1364,958], [1359,985], [1367,970], [1385,977], [1378,944]]
+    },
+    {
+        name: 'SOLEN HIVE 1 (RUNA 8)',
+        runeHook: 49,
+        coords: [[3108,524], [3124,527], [3136,539], [3148,542], [3158,551], [3158,527], [3155,510], [3157,491], [3141,501], [3132,499], [3119,495], [3123,484], [3123,470], [3105,500], [3107,524]]
+    },
+    {
+        name: 'SOLEN HIVE 2 (RUNA 9)',
+        runeHook: 55,
+        coords: [[3116,515], [3126,502], [3130,491], [3134,467], [3156,458], [3170,468], [3153,500], [3153,509], [3141,511], [3126,536], [3114,544], [3100,545], [3134,571], [3162,545], [3165,531], [3156,518], [3175,508], [3148,493], [3134,490]]
+    }
+];
+
+
+// =====================================================
+// FARM FUNGHI SOLEN - START / STOP
+// =====================================================
+
+function StartFunghiFarmer() {
+    Orion.Print(65, '--- FARM FUNGHI SOLEN AVVIATO ---');
+
+    if (!Orion.FindObject(FUNGI_RUNEBOOK_VAR)) {
+        Orion.CharPrint(Player.Serial(), 33, 'Runebook Funghi non selezionato!');
+        return;
+    }
+
+    FarmStartProfile('Funghi Farmer');
+    FarmCleanState(100);
+    Orion.IgnoreReset();
+
+    var routeIndex = 0;
+
+    while (!Player.Dead()) {
+        if (FarmShouldStop()) return;
+        if (FarmHandleBloodOath()) continue;
+
+        if (FunghiCountInBackpack() >= FUNGI_BANK_LIMIT || FarmIsWeightAtLimit()) {
+            FunghiDepositToBank();
+            routeIndex = 0;
+            Orion.Wait(1000);
+            continue;
+        }
+
+        if (routeIndex >= FUNGI_FARM_ROUTES.length) routeIndex = 0;
+
+        var route = FUNGI_FARM_ROUTES[routeIndex];
+
+        Orion.Print(65, 'Farm Funghi: recall ' + route.name + ' hook=' + route.runeHook);
+
+        if (!FarmRetryUntilDone(function() {
+            return FarmRecallRune(FUNGI_RUNEBOOK_VAR, route.runeHook, route.name);
+        }, 'Recall Funghi ' + route.name)) {
+            return;
+        }
+
+        FunghiRunRailWithCombat(route);
+        routeIndex++;
+        Orion.Wait(300);
+    }
+}
+
+function StopFunghiFarmer() {
+    Orion.Terminate('StartFunghiFarmer');
+    Orion.WarMode(false);
+    Orion.CancelTarget();
+    Orion.CancelWaitTarget();
+    Orion.Print(33, 'Farm Funghi fermato.');
+}
+
+
+// =====================================================
+// FARM FUNGHI SOLEN - AREA / COMBAT
+// =====================================================
+
+function FunghiRunRailWithCombat(route) {
+    if (!route || !route.coords || route.coords.length <= 0) {
+        Orion.Print(33, 'Route funghi non valida.');
+        return;
+    }
+
+    Orion.Print(65, 'Eseguo mini rail: ' + route.name);
+
+    for (var i = 0; i < route.coords.length; i++) {
+        if (FarmShouldStop()) return;
+
+        if (FarmHandleBloodOath()) {
+            i--;
+            continue;
+        }
+
+        if (FunghiCountInBackpack() >= FUNGI_BANK_LIMIT || FarmIsWeightAtLimit()) {
+            FunghiLootAround();
+            FunghiDepositToBank();
+            return;
+        }
+
+        var coord = route.coords[i];
+
+        Orion.Print(65, route.name + ' punto ' + (i + 1) + '/' + route.coords.length + ': ' + coord[0] + ',' + coord[1]);
+
+        FunghiWalkToPointWithCombat(coord[0], coord[1]);
+        FunghiLootAround();
+
+        var scanEnd = Orion.Now() + FUNGI_POINT_COMBAT_TIME;
+
+        while (!Player.Dead() && Orion.Now() < scanEnd) {
+            if (FarmShouldStop()) return;
+            if (FarmHandleBloodOath()) continue;
+
+            if (FunghiCountInBackpack() >= FUNGI_BANK_LIMIT || FarmIsWeightAtLimit()) {
+                FunghiLootAround();
+                FunghiDepositToBank();
+                return;
+            }
+
+            var solen = FunghiFindNearestSolen();
+
+            if (solen) {
+                FunghiAttackSolen(solen);
+                FunghiLootAround();
+                scanEnd = Orion.Now() + FUNGI_POINT_COMBAT_TIME;
+            } else {
+                FunghiLootAround();
+                Orion.Wait(10); // Modificato: prima era 300! Rimuove il blocco ad ogni waypoint.
+            }
+        }
+    }
+
+    Orion.Print(65, 'Mini rail completata: ' + route.name);
+}
+
+function FunghiWalkToPointWithCombat(x, y) {
+    var timeout = Orion.Now() + FUNGI_WALK_TIMEOUT;
+
+    while (!Player.Dead() && Orion.GetDistance(x, y) > 2 && Orion.Now() < timeout) {
+        if (FarmShouldStop()) return false;
+        if (FarmHandleBloodOath()) continue;
+
+        var solen = FunghiFindNearestSolen();
+
+        if (solen) {
+            FunghiAttackSolen(solen);
+            FunghiLootAround();
+        } else {
+            Orion.WalkTo(x, y, Player.Z(), 1, 255, 1, 2, 1000);
+            Orion.Wait(10); 
+        }
+    }
+
+    FunghiLootAround();
+
+    return Orion.GetDistance(x, y) <= 3;
+}
+
+function FunghiFindNearestSolen() {
+    Orion.Ignore('self');
+
+    var friends = Orion.GetFriendList();
+
+    for (var i = 0; i < friends.length; i++) {
+        Orion.Ignore(friends[i]);
+    }
+
+    var mobs = Orion.FindTypeEx('any', 'any', 'ground', 'mobile|live|ignorefriends|ignoreself|inlos|near', FUNGI_MOB_RANGE, 'gray|criminal|red|enemy|orange');
+
+    if (!mobs || mobs.length <= 0) return null;
+
+    var valid = [];
+
+    for (var j = 0; j < mobs.length; j++) {
+        var mob = mobs[j];
+        if (!mob) continue;
+
+        if (typeof IsIgnoredSummon === 'function' && IsIgnoredSummon(mob)) {
+            Orion.Ignore(mob.Serial());
+            continue;
+        }
+
+        var name = mob.Name ? (mob.Name() || '').toLowerCase() : '';
+        var props = mob.Properties ? (mob.Properties() || '').toLowerCase() : '';
+
+        if (name.indexOf('solen') !== -1 || props.indexOf('solen') !== -1) {
+            valid.push(mob);
+        }
+    }
+
+    if (!valid.length) return null;
+
+    valid.sort(function(a, b) {
+        return a.Distance() - b.Distance();
+    });
+
+    return valid[0];
+}
+
+function FunghiAttackSolen(solen) {
+    if (!solen) return false;
+
+    var serial = solen.Serial();
+
+    if (!serial || !Orion.ObjectExists(serial)) return false;
+
+    Orion.CharPrint(serial, 65, '*SOLEN*');
+    Orion.AddHighlightCharacter(serial, 65, true);
+
+    if (typeof TryHonorEnemy === 'function') TryHonorEnemy(solen);
+
+    while (!Player.Dead() && Orion.ObjectExists(serial)) {
+        if (FarmShouldStop()) return false;
+        if (FarmHandleBloodOath()) continue;
+
+        var mob = Orion.FindObject(serial);
+
+        if (!mob || mob.Dead()) {
+            Orion.WarMode(false);
+            return true;
+        }
+
+        if (typeof IsIgnoredSummon === 'function' && IsIgnoredSummon(mob)) {
+            Orion.Ignore(serial);
+            return false;
+        }
+
+        if (mob.Distance() > 1) {
+            Orion.WalkTo(mob.X(), mob.Y(), mob.Z(), 1, 255, 1, 2, 3000);
+            Orion.Wait(150);
+        }
+
+        if (mob.Distance() <= 12) {
+            Orion.WarMode(true);
+            Orion.Attack(serial);
+        }
+
+        Orion.Wait(150);
+    }
+
+    Orion.WarMode(false);
+    return true;
+}
+
+
+// =====================================================
+// FARM FUNGHI SOLEN - LOOT / BANK
+// =====================================================
+
+function FunghiCountInBackpack() {
+    return FarmCountGraphicInBackpack(FUNGI_GRAPHIC);
+}
+
+function FunghiLootAround() {
+    FunghiLootGround();
+    FunghiLootCorpses();
+}
+
+function FunghiLootGround() {
+    var funghi = Orion.FindType(FUNGI_GRAPHIC, 'any', 'ground', 'item|near', FUNGI_LOOT_RANGE);
+
+    if (!funghi || funghi.length <= 0) return;
+
+    for (var i = 0; i < funghi.length; i++) {
+        if (FarmShouldStop()) return;
+        if (FarmIsWeightAtLimit()) return;
+
+        var obj = Orion.FindObject(funghi[i]);
+        if (!obj || obj.Distance() > FUNGI_LOOT_RANGE) continue;
+
+        Orion.Print(65, 'Loot fungo da terra: ' + obj.Serial());
+        Orion.MoveItem(obj.Serial(), 0, 'backpack');
+        Orion.Wait(200);
+    }
+}
+
+function FunghiLootCorpses() {
+    var corpses = Orion.FindTypeEx('0x2006', 'any', 'ground', 'item|near', FUNGI_LOOT_RANGE);
+
+    if (!corpses || corpses.length <= 0) return;
+
+    for (var c = 0; c < corpses.length; c++) {
+        if (FarmShouldStop()) return;
+        if (FarmIsWeightAtLimit()) return;
+
+        var corpse = corpses[c];
+        if (!corpse || corpse.Distance() > FUNGI_LOOT_RANGE) continue;
+
+        Orion.UseObject(corpse.Serial());
+        Orion.Wait(250);
+
+        var funghi = Orion.FindType(FUNGI_GRAPHIC, 'any', corpse.Serial(), 'item|recurse');
+
+        for (var i = 0; funghi && i < funghi.length; i++) {
+            if (FarmIsWeightAtLimit()) return;
+            if (!Orion.ObjectExists(funghi[i])) continue;
+
+            Orion.Print(65, 'Loot fungo da corpse: ' + funghi[i]);
+            Orion.MoveItem(funghi[i], 0, 'backpack');
+            Orion.Wait(250);
+        }
+    }
+}
+
+function FunghiDepositToBank() {
+    Orion.Print(65, 'Farm Funghi: torno in banca a depositare.');
+
+    return FarmRetryUntilDone(function() {
+        return FarmDepositGraphicToBank(FUNGI_RUNEBOOK_VAR, FUNGI_GRAPHIC, 'Funghi');
+    }, 'Deposito Funghi in banca');
+}
+
+
+// =====================================================
+// RAIL EXTRA
+// =====================================================
+
+function Primevalrail() {
+    EnsureSbloccaSeFermoRunning();
+    StartProfile('Primeval', 'Primeval');
+}
+
+function Semidarail() {
+    EnsureSbloccaSeFermoRunning();
+    StartProfile('Semidar', 'Semidar');
+}
+
+// =====================================================
+// FARM QUEST SEMINO (SOLEN MATRIARCH)
+// =====================================================
+
+var SEED_RUNEBOOK_VAR      = 'farm_runebook_semino';
+var SEED_GRAPHIC           = '0x0DCF';
+var SEED_COLOR             = '0x08A5';
+var POT_GRAPHIC            = '0x26B8';
+var MATRIARCH_GRAPHIC      = '0x0328';
+var MATRIARCH_COLOR        = '0x83F3';
+var WATER_PITCHER_FULL     = '0x1F9D';
+var WATER_PITCHER_EMPTY    = '0x0FF6|0x0FF7|0x0BFC|0x0BFD';
+var WATER_VAT_GRAPHIC      = '0x0B41|0x0B42|0x0B43|0x0B44';
+var SOLEN_HOLE_GRAPHIC     = '0x1733|0x1734|0x09BD'; 
+var MATRIARCH_SERIAL = '0x00023497';
+
+var SEED_RUNE_BANK         = 7;  // Runa 1
+var SEED_RUNE_HOLE         = 61; // Runa 10 Formicaio (7 + (9*6) = 61)
+var SEED_RUNE_HOME         = 67; // Runa 11 Casa (7 + (10*6) = 67)
+var SEED_RUNE_KILL_1       = 25; // Runa 4 (7 + (3*6) = 25)
+var SEED_RUNE_KILL_2       = 37; // Runa 6 (7 + (5*6) = 37)
+var SEED_RUNE_KILL_3       = 49; // Runa 8 (7 + (7*6) = 49)
+
+function StartSeedQuestFarmer() {
+    Orion.Print(65, '=== QUEST SEMINO AVVIATA ===');
+    if (!Orion.FindObject(SEED_RUNEBOOK_VAR)) {
+        Orion.CharPrint(Player.Serial(), 33, 'Runebook Semino non selezionato!');
+        return;
+    }
+
+    Orion.SetGlobal('StopAllScripts', 'false');
+    
+    if (!Orion.ScriptRunning('CheckCurseAndPoison')) Orion.Exec('CheckCurseAndPoison', 'true');
+    if (!Orion.ScriptRunning('AutoMount')) Orion.Exec('AutoMount', 'true');
+    if (!Orion.ScriptRunning('Durability_Watcher')) Orion.Exec('Durability_Watcher', 'true');
+    if (!Orion.ScriptRunning('SuperInsura')) Orion.Exec('SuperInsura', 'true');
+    if (!Orion.ScriptRunning('AutoLogoutOnDeath')) Orion.Exec('AutoLogoutOnDeath', 'true');
+    
+    SeedStopCombat();
+
+    // Sostituiamo firstRun con needsRestart per gestire agilmente i fallimenti
+    var needsRestart = true;
+
+    while (!Player.Dead()) {
+        if (FarmShouldStop()) return;
+        Orion.Print(65, '--- NUOVO CICLO QUEST SEMINO ---');
+
+        // FASE INIZIALE O RECOVERY: Gira la primissima volta o dopo che la macro ha fallito e cancellato la quest
+        if (needsRestart) {
+            Orion.Print(65, '[SEED] FASE INIZIALE / RECOVERY: Preparo e avvio la quest.');
+            if (!SeedRetryUntilDone(SeedBankPrepare, 'Banca: Prepara Seme iniziale e Funghi')) { SeedCancelQuest(); needsRestart = true; continue; }
+            if (!SeedRetryUntilDone(SeedGoToMatriarch, 'Naviga fino alla Matriarch')) { SeedCancelQuest(); needsRestart = true; continue; }
+            if (!SeedRetryUntilDone(SeedStartQuest, 'Consegna Seme e accetta Quest')) { SeedCancelQuest(); needsRestart = true; continue; }
+            needsRestart = false;
+        }
+
+        // FASE 1: Uccidi 7 Formiche
+        if (!SeedRetryUntilDone(SeedKillInfiltrators, 'Uccidi 7 Formiche Nere')) { SeedCancelQuest(); needsRestart = true; continue; }
+
+        // FASE 2: Riempi l'acqua a casa
+        if (!SeedRetryUntilDone(SeedFillWaterAtHome, 'Vai a casa e riempi 8 brocche')) { SeedCancelQuest(); needsRestart = true; continue; }
+
+        // FASE 3: Banca (Posa PoT, prende 1 seme e funghi per la fine del giro)
+        if (!SeedRetryUntilDone(SeedBankPrepare, 'Banca: Posa PoT, Prepara Seme e Funghi')) { SeedCancelQuest(); needsRestart = true; continue; }
+
+        // FASE 4: Vai dalla Matriarch per aggiornare lo step acqua
+        if (!SeedRetryUntilDone(SeedGoToMatriarch, 'Naviga fino alla Matriarch')) { SeedCancelQuest(); needsRestart = true; continue; }
+        if (!SeedRetryUntilDone(SeedTalkToMatriarch, 'Parla con la Matriarch per attivare l\'acqua')) { SeedCancelQuest(); needsRestart = true; continue; }
+
+        // FASE 5: Vai a piedi alla Vasca e versa
+        if (!SeedRetryUntilDone(SeedWalkToVat, 'Cammina a piedi fino alla Vasca')) { SeedCancelQuest(); needsRestart = true; continue; }
+        if (!SeedRetryUntilDone(SeedPourWater, 'Versa l\'acqua nella vasca Solen')) { SeedCancelQuest(); needsRestart = true; continue; }
+
+        // FASE 6: Torna dalla Matriarch (a piedi), chiudi quest
+        if (!SeedRetryUntilDone(SeedTalkToMatriarch, 'Torna dalla Matriarch e concludi acqua')) { SeedCancelQuest(); needsRestart = true; continue; }
+        if (!SeedRetryUntilDone(SeedDeliverFungi, 'Consegna 200 Funghi per i PoT')) { SeedCancelQuest(); needsRestart = true; continue; }
+        
+        // FASE 7: Consegna il seme per il prossimo ciclo!
+        if (!SeedRetryUntilDone(SeedStartQuest, 'Consegna Seme per il prossimo giro')) { SeedCancelQuest(); needsRestart = true; continue; }
+
+        Orion.Print(65, '--- CICLO SEMINO COMPLETATO (Prossima quest già avviata!) ---');
+        Orion.Wait(2000);
+    }
+}
+
+function SeedStopCombat() {
+    Orion.Terminate('UseSpecialAbilities');
+    Orion.Terminate('AutoConsecrate');
+    Orion.Terminate('AutoBushidoAbilities');
+    Orion.Terminate('AutoCurseWeapon');
+    Orion.Terminate('AutoDivine');
+    Orion.WarMode(false);
+}
+
+function SeedStartCombat() {
+    if (!Orion.ScriptRunning('UseSpecialAbilities')) Orion.Exec('UseSpecialAbilities', 'true');
+    if (!Orion.ScriptRunning('AutoConsecrate')) Orion.Exec('AutoConsecrate', 'true');
+    if (!Orion.ScriptRunning('AutoBushidoAbilities')) Orion.Exec('AutoBushidoAbilities', 'true');
+    if (!Orion.ScriptRunning('AutoCurseWeapon')) Orion.Exec('AutoCurseWeapon', 'true');
+    if (!Orion.ScriptRunning('AutoDivine')) Orion.Exec('AutoDivine', 'true');
+}
+
+
+// Sostituisci la vecchia funzione SeedRetryUntilDone con questa limitata a 10 step
+function SeedRetryUntilDone(actionFn, label) {
+    var maxAttempts = 10;
+    var attempts = 0;
+    var waitMs = 1500;
+
+    while (!FarmShouldStop() && attempts < maxAttempts) {
+        attempts++;
+        FarmCleanState(125);
+        Orion.Print(65, '[SEED] ' + label + ' (Tentativo ' + attempts + '/' + maxAttempts + ')');
+
+        var ok = false;
+        try {
+            ok = actionFn();
+        } catch (e) {
+            Orion.Print(33, '[SEED ERRORE] ' + label + ': ' + e);
+            ok = false;
+        }
+
+        if (ok) {
+            Orion.Print(65, '[SEED OK] ' + label);
+            return true;
+        }
+
+        Orion.CharPrint(Player.Serial(), 33, label + ' fallito. Riprovo...');
+        Orion.Wait(waitMs);
+    }
+
+    Orion.Print(33, '[SEED FALLITO FATALE] Max tentativi (' + maxAttempts + ') raggiunti per: ' + label);
+    return false;
+}
+
+// Nuova funzione per fare un Cancel Quest pulito universale
+function SeedCancelQuest() {
+    Orion.Print(33, '[SEED] Avvio procedura Cancel Quest per ripristino ciclo...');
+    FarmCleanState(100);
+
+    // Sostituisco il seriale fisso del tuo PG con Player.Serial() così funziona su qualsiasi pg
+    Orion.RequestContextMenu(Player.Serial());
+    Orion.WaitContextMenuID(Player.Serial(), 4);
+
+    if (Orion.WaitForGump(1500)) {
+        var gump0 = Orion.GetGump('last');
+        if (gump0 !== null && !gump0.Replayed() && gump0.ID() === '0x08E419F2') {
+            gump0.Select(Orion.CreateGumpHook(1));
+            Orion.Wait(300);
+            Orion.Print(65, '[SEED] Quest cancellata con successo!');
+            return true;
+        }
+    }
+
+    Orion.Print(33, '[SEED] Gump cancel quest non trovato o fallito.');
+    return false;
+}
+// --- FASE 0: BANCA E PREPARAZIONE ---
+// --- FASE 0: BANCA E PREPARAZIONE ---
+function SeedBankPrepare() {
+    if (!FarmRecallRune(SEED_RUNEBOOK_VAR, SEED_RUNE_BANK, 'BANCA')) return false;
+    
+    var bank = FarmOpenBankAndGetContainer();
+    if (!bank) return false;
+
+    // 1. Deposita PoT
+    var pots = Orion.FindType(POT_GRAPHIC, 'any', 'backpack');
+    for (var i = 0; pots && i < pots.length; i++) {
+        Orion.MoveItem(pots[i], 0, bank);
+        Orion.Wait(800);
+    }
+
+    // 2. Preleva 1 Seme (qualsiasi colore)
+    var seedsInPack = Orion.FindType(SEED_GRAPHIC, 'any', 'backpack');
+    if (!seedsInPack || seedsInPack.length < 1) {
+        var bankSeeds = Orion.FindType(SEED_GRAPHIC, 'any', bank);
+        if (bankSeeds && bankSeeds.length > 0) {
+            Orion.MoveItem(bankSeeds[0], 1, 'backpack');
+            Orion.Wait(800);
+        }
+        
+        // Verifica finale: se non ho ancora il seme, stop macro.
+        seedsInPack = Orion.FindType(SEED_GRAPHIC, 'any', 'backpack');
+        if (!seedsInPack || seedsInPack.length < 1) {
+            Orion.CharPrint(Player.Serial(), 33, 'FATALE: Semi finiti in banca! Fermo la macro.');
+            Orion.Print(33, '[SEED ERRORE] Semi esauriti. Script interrotto.');
+            Orion.SetGlobal('StopAllScripts', 'true');
+            return false;
+        }
+    }
+
+    // 3. Preleva 200 Funghi (se ne abbiamo meno)
+    var funghiCount = FarmCountGraphicInBackpack(FUNGI_GRAPHIC);
+    if (funghiCount < 200) {
+        var needed = 200 - funghiCount;
+        var bankFungi = Orion.FindType(FUNGI_GRAPHIC, 'any', bank);
+        if (bankFungi && bankFungi.length > 0) {
+            Orion.MoveItem(bankFungi[0], needed, 'backpack');
+            Orion.Wait(800);
+        }
+        
+        // Verifica finale: se non sono arrivato a 200 funghi, stop macro.
+        if (FarmCountGraphicInBackpack(FUNGI_GRAPHIC) < 200) {
+            Orion.CharPrint(Player.Serial(), 33, 'FATALE: Funghi insufficienti in banca! Fermo la macro.');
+            Orion.Print(33, '[SEED ERRORE] Funghi esauriti (meno di 200). Script interrotto.');
+            Orion.SetGlobal('StopAllScripts', 'true');
+            return false;
+        }
+    }
+
+    // 4. Controllo 8 Brocche vuote (o piene da svuotare)
+    var emptyPitchers = Orion.FindType(WATER_PITCHER_EMPTY, 'any', 'backpack');
+    var fullPitchers = Orion.FindType(WATER_PITCHER_FULL, 'any', 'backpack');
+    var totalPitchers = (emptyPitchers ? emptyPitchers.length : 0) + (fullPitchers ? fullPitchers.length : 0);
+    
+    if (totalPitchers < 8) {
+        Orion.CharPrint(Player.Serial(), 33, 'FATALE: Non hai 8 brocche nello zaino! Fermo la macro.');
+        Orion.Print(33, '[SEED ERRORE] Brocche mancanti. Script interrotto.');
+        Orion.SetGlobal('StopAllScripts', 'true');
+        return false; 
+    }
+
+    return true;
+}
+
+// --- NAVIGAZIONE SICURA (Anticrash) ---
+function SeedSafeWalk(x, y, timeoutMs) {
+    var end = Orion.Now() + timeoutMs;
+    // Tolte le micropause: Orion.WalkTo aspetta in automatico il completamento o il timeout
+    while (!Player.Dead() && Orion.GetDistance(x, y) > 2 && Orion.Now() < end) {
+        if (FarmShouldStop()) return false;
+        Orion.WalkTo(x, y, Player.Z(), 1, 255, 1, 2, 2500); 
+    }
+    return Orion.GetDistance(x, y) <= 4;
+}
+
+function SeedGoToMatriarch() {
+    SeedStopCombat(); 
+    if (!FarmRecallRune(SEED_RUNEBOOK_VAR, SEED_RUNE_HOLE, 'FORMICAIO EXT')) return false;
+    Orion.Wait(800);
+
+    if (!SeedEnterHole()) return false;
+    Orion.Wait(800); 
+    
+    Orion.Print(65, '[SEED] Cammino verso Buco 2...');
+    if (!SeedSafeWalk(5660, 1957, 45000)) return false;
+    if (!SeedEnterHole()) return false;
+    Orion.Wait(800);
+    
+    Orion.Print(65, '[SEED] Cammino verso Buco 3...');
+    if (!SeedSafeWalk(5698, 1930, 45000)) return false;
+    if (!SeedEnterHole()) return false;
+    Orion.Wait(800);
+
+    Orion.Print(65, '[SEED] Cammino verso la Matriarch...');
+    if (!SeedSafeWalk(5776, 1899, 60000)) return false;
+    Orion.Wait(500);
+
+    return !!SeedFindMatriarch();
+}
+
+
+function SeedWalkToVat() {
+    Orion.Print(65, '[SEED] Cammino a piedi verso la Vasca...');
+    if (!SeedSafeWalk(5799, 1924, 30000)) {
+        Orion.Print(33, '[SEED] Timeout o blocco verso la Vasca.');
+        return false;
+    }
+    return true;
+}
+
+function SeedEnterHole() {
+    // I seriali statici esatti dei buchi presi dalle tue macro
+    var staticHoles = ['0x40056074', '0x40055FE2', '0x40055F9A'];
+    var entered = false;
+
+    // TENTATIVO 1: Usa il seriale statico se si trova a portata (distanza <= 4)
+    for (var i = 0; i < staticHoles.length; i++) {
+        var holeSerial = staticHoles[i];
+        var holeObj = Orion.FindObject(holeSerial);
+        
+        if (holeObj && holeObj.Distance() <= 4) {
+            Orion.Print(65, '[SEED] Entro nel buco statico: ' + holeSerial);
+            Orion.UseObject(holeSerial);
+            Orion.Wait(500);
+            entered = true;
+            break;
+        }
+    }
+
+    if (entered) return true;
+
+    Orion.Print(33, '[SEED] Buco statico non trovato. Tento click forzato a terra...');
+    var allGroundItems = Orion.FindTypeEx('any', 'any', 'ground', 'item|near', 2);
+    var clickedSomething = false;
+    
+    if (allGroundItems && allGroundItems.length > 0) {
+        for (var j = 0; j < allGroundItems.length; j++) {
+            var item = allGroundItems[j];
+            // Esclude i cadaveri (0x2006) per sicurezza
+            if (item.Graphic() !== '0x2006') { 
+                Orion.UseObject(item.Serial());
+                Orion.Wait(300);
+                clickedSomething = true;
+            }
+        }
+    }
+
+    if (clickedSomething) {
+        Orion.Wait(500);
+        return true; 
+    }
+
+    Orion.Print(33, '[SEED] Nessun buco trovato nelle vicinanze.');
+    return false;
+}
+
+
+function SeedKillInfiltrators() {
+    SeedStartCombat(); 
+
+    var kills = 0;
+    var targetKills = 7;
+    
+    var killRoutes = [];
+    for (var i = 0; i < FUNGI_FARM_ROUTES.length; i++) {
+        var r = FUNGI_FARM_ROUTES[i];
+        if (r.runeHook === 25 || r.runeHook === 37 || r.runeHook === 49) {
+            killRoutes.push(r);
+        }
+    }
+
+    var routeIndex = 0;
+    Orion.ClearJournal();
+    
+    while (!Player.Dead() && kills < targetKills) {
+        if (FarmShouldStop()) { SeedStopCombat(); return false; }
+        
+        var currentRoute = killRoutes[routeIndex];
+        if (!FarmRecallRune(SEED_RUNEBOOK_VAR, currentRoute.runeHook, 'SPOT KILL ' + currentRoute.name)) {
+            SeedStopCombat(); return false;
+        }
+        Orion.Wait(1000);
+
+        for (var p = 0; p < currentRoute.coords.length; p++) {
+            if (FarmShouldStop() || kills >= targetKills) break;
+            if (FarmHandleBloodOath()) { p--; continue; }
+
+            var coord = currentRoute.coords[p];
+            Orion.Print(65, '[SEED] Caccia formiche: ' + currentRoute.name + ' (Punto ' + (p + 1) + '/' + currentRoute.coords.length + ')');
+            
+            var timeout = Orion.Now() + 10000; 
+            while (!Player.Dead() && Orion.GetDistance(coord[0], coord[1]) > 2 && Orion.Now() < timeout) {
+                if (FarmShouldStop() || kills >= targetKills) break;
+                if (FarmHandleBloodOath()) continue;
+
+                var solen = FunghiFindNearestSolen();
+                if (solen) {
+                    var serial = solen.Serial();
+                    FunghiAttackSolen(solen);
+                    
+                    // SE E' MORTA, ALZIAMO IL CONTATORE E LOOTIAMO
+                    if (!Orion.ObjectExists(serial) || Orion.FindObject(serial).Dead()) {
+                        kills++;
+                        Orion.Print(65, '[SEED] Formiche uccise: ' + kills + '/' + targetKills);
+                        
+                        // --- PAUSA LOOT ---
+                        Orion.Wait(600); // Pausa di assestamento per far poppare il corpse a terra
+                        Orion.Print(65, '[SEED] Pausa per loot funghi...');
+                        if (typeof FunghiLootAround === 'function') {
+                            FunghiLootAround(); // Usa il tuo autoloot funghi
+                        } else {
+                            Orion.Wait(1500); // Se l'autoloot manca, fa solo la pausa richiesta
+                        }
+                        // ------------------
+                    }
+                } else {
+                    Orion.WalkTo(coord[0], coord[1], Player.Z(), 1, 255, 1, 2, 1000);
+                }
+            }
+        }
+
+        routeIndex++;
+        if (routeIndex >= killRoutes.length) routeIndex = 0; 
+    }
+    
+    SeedStopCombat(); 
+    return true; 
+}
+
+function SeedFillWaterAtHome() {
+    if (!FarmRecallRune(SEED_RUNEBOOK_VAR, SEED_RUNE_HOME, 'CASA ACQUA')) return false;
+    Orion.Wait(1000);
+
+    var waterVats = Orion.FindType(WATER_VAT_GRAPHIC, 'any', 'ground', 'item|near', 6);
+    if (!waterVats || waterVats.length === 0) {
+        Orion.CharPrint(Player.Serial(), 33, '[SEED] Vasca acqua non trovata a casa!');
+        return false;
+    }
+    
+    var vat = waterVats[0];
+
+    var emptyPitchers = Orion.FindType(WATER_PITCHER_EMPTY, 'any', 'backpack');
+    if (!emptyPitchers || emptyPitchers.length === 0) {
+        var fullPitchers = Orion.FindType(WATER_PITCHER_FULL, 'any', 'backpack');
+        if (fullPitchers && fullPitchers.length >= 8) return true; // Già piene!
+        return false;
+    }
+
+    for (var i = 0; i < emptyPitchers.length; i++) {
+        Orion.UseObject(emptyPitchers[i]);
+        if (Orion.WaitForTarget(1500)) {
+            Orion.TargetObject(vat);
+            Orion.Wait(600);
+        }
+    }
+    
+    // Controlla che ora siano piene
+    var checkFull = Orion.FindType(WATER_PITCHER_FULL, 'any', 'backpack');
+    return (checkFull && checkFull.length >= 8);
+}
+
+function SeedPourWater() {
+    var vatSerial = '0x4012E148';
+    var vat = Orion.FindObject(vatSerial);
+    
+    if (!vat || vat.Distance() > 6) {
+        Orion.Print(33, '[SEED] Vasca statica non vista. Cerco per grafica...');
+        var waterVats = Orion.FindType(WATER_VAT_GRAPHIC, 'any', 'ground', 'item|near', 6);
+        if (!waterVats || waterVats.length === 0) {
+            Orion.Print(33, '[SEED] Nessuna vasca trovata nelle vicinanze!');
+            return false;
+        }
+        vat = Orion.FindObject(waterVats[0]);
+    }
+
+    var fullPitchers = Orion.FindType(WATER_PITCHER_FULL, 'any', 'backpack');
+    if (!fullPitchers || fullPitchers.length < 8) {
+        Orion.Print(33, '[SEED] Non hai 8 brocche piene nello zaino!');
+        return false;
+    }
+
+    Orion.Print(65, '[SEED] Verso l\'acqua...');
+    for (var i = 0; i < fullPitchers.length; i++) {
+        Orion.UseObject(fullPitchers[i]);
+        if (Orion.WaitForTarget(1500)) {
+            // Usa il seriale (sia che derivi da stringa fissa o da FindType)
+            Orion.TargetObject(vat.Serial ? vat.Serial() : vatSerial);
+            Orion.Wait(600);
+        }
+    }
+    
+    return true;
+}
+
+function SeedFindMatriarch() {
+    // 1. Tenta col Seriale Statico che mi hai dato nello screen, raggio 30
+    var fixed = Orion.FindObject(MATRIARCH_SERIAL);
+    if (fixed && Orion.ObjectExists(fixed.Serial()) && fixed.Distance() <= 30) return fixed;
+
+    // 2. Fallback dinamico: cerca in un raggio enorme (30) tramite nome
+    var npcs = Orion.FindTypeEx(MATRIARCH_GRAPHIC, 'any', 'ground', 'mobile|live|near', 30, 'any');
+    if (!npcs || npcs.length <= 0) return null;
+
+    for (var i = 0; i < npcs.length; i++) {
+        var npc = npcs[i];
+        if (!npc) continue;
+
+        var name = '';
+        var props = '';
+
+        try { name = npc.Name ? (npc.Name() || '').toLowerCase() : ''; } catch (e1) {}
+        try { props = npc.Properties ? (npc.Properties() || '').toLowerCase() : ''; } catch (e2) {}
+
+        // Se nel nome o proprietà c'è scritto "matriarch", è lei.
+        if (name.indexOf('matriarch') !== -1 || props.indexOf('matriarch') !== -1) {
+            return npc;
+        }
+    }
+
+    return npcs[0];
+}
+
+
+function SeedWalkToMatriarch() {
+    var matriarch = SeedFindMatriarch();
+    
+    // Se non la vede nello schermo (es. siamo lontani alla vasca), si avvicina prima alle sue coordinate
+    if (!matriarch) {
+        Orion.Print(65, '[SEED] Matriarca fuori vista. Mi avvicino alle sue coordinate...');
+        SeedSafeWalk(5776, 1899, 15000); 
+        matriarch = SeedFindMatriarch(); // Riprova a cercarla ora che siamo vicini
+    }
+
+    if (!matriarch) return false;
+
+    var timeout = Orion.Now() + 15000; // 15 secondi di tempo massimo per raggiungerla fisicamente
+
+    // Continua a camminare verso di lei finché non sei a 2 passi o meno
+    while (!Player.Dead() && matriarch && matriarch.Distance() > 2 && Orion.Now() < timeout) {
+        if (FarmShouldStop()) return false;
+        
+        Orion.WalkTo(matriarch.X(), matriarch.Y(), matriarch.Z(), 1, 255, 1, 2, 2000);
+        Orion.Wait(200);
+        
+        // Riautentica la posizione della Matriarch nel caso si stia muovendo
+        matriarch = SeedFindMatriarch(); 
+    }
+
+    matriarch = SeedFindMatriarch();
+    return !!matriarch && matriarch.Distance() <= 2;
+}
+
+// --- FASE 1: START QUEST ---
+function SeedStartQuest() {
+    // INSEGUI LA MATRIARCH PRIMA DI AGIRE
+    if (!SeedWalkToMatriarch()) return false; 
+
+    var matriarch = SeedFindMatriarch();
+    if (!matriarch) return false;
+
+    var seed = Orion.FindType(SEED_GRAPHIC, 'any', 'backpack');
+    if (!seed || seed.length === 0) return false;
+
+    FarmCleanState(100);
+    Orion.Print(65, '[SEED] Sono vicino! Trascino seme sulla Matriarch.');
+    
+    Orion.DragItem(seed[0], 1);
+    Orion.Wait(400);
+    Orion.DropDraggedItem(matriarch.Serial());
+    Orion.Wait(800);
+
+    var clicked = false;
+    if (Orion.WaitForGump(1500)) {
+        var g0 = Orion.GetGump('last');
+        if (g0 !== null && !g0.Replayed() && g0.ID() === '0x92AF4E20') {
+            g0.Select(Orion.CreateGumpHook(1));
+            clicked = true;
+            Orion.Wait(200);
+        }
+    }
+    if (Orion.WaitForGump(1500)) {
+        var g1 = Orion.GetGump('last');
+        if (g1 !== null && !g1.Replayed() && g1.ID() === '0xA01862EA') {
+            g1.Select(Orion.CreateGumpHook(1));
+            clicked = true;
+            Orion.Wait(200);
+        }
+    }
+
+    return clicked;
+}
+
+// --- FASE 3 E 6: TALK MATRIARCH ---
+function SeedTalkToMatriarch() {
+    // INSEGUI LA MATRIARCH PRIMA DI AGIRE
+    if (!SeedWalkToMatriarch()) return false;
+
+    var matriarch = SeedFindMatriarch();
+    if (!matriarch) return false;
+
+    FarmCleanState(100);
+    Orion.RequestContextMenu(matriarch.Serial());
+    Orion.WaitContextMenuID(matriarch.Serial(), 0);
+
+    if (Orion.WaitForGump(1500)) {
+        var gump = Orion.GetGump('last');
+        if (gump !== null && !gump.Replayed() && gump.ID() === '0xA01862EA') {
+            gump.Select(Orion.CreateGumpHook(1));
+            Orion.Wait(200);
+            return true;
+        }
+    }
+    return false;
+}
+
+// --- FASE 6: DELIVER FUNGI ---
+function SeedDeliverFungi() {
+    // INSEGUI LA MATRIARCH PRIMA DI AGIRE
+    if (!SeedWalkToMatriarch()) return false;
+
+    var matriarch = SeedFindMatriarch();
+    if (!matriarch) return false;
+
+    var fungi = Orion.FindType(FUNGI_GRAPHIC, 'any', 'backpack');
+    if (!fungi || fungi.length === 0) return false;
+
+    FarmCleanState(100);
+    Orion.Print(65, '[SEED] Sono vicino! Trascino 200 funghi.');
+    
+    Orion.DragItem(fungi[0], 200);
+    Orion.Wait(400);
+    Orion.DropDraggedItem(matriarch.Serial());
+    Orion.Wait(1200);
+
+    var pots = Orion.FindType(POT_GRAPHIC, 'any', 'backpack');
+    if (pots && pots.length > 0) {
+        Orion.CharPrint(Player.Serial(), 65, '[SEED] PoT Ricevuti!');
+        return true;
+    }
+
+    return false;
+}
+
